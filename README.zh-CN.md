@@ -22,7 +22,7 @@
 需要 YesPlayMusic **3.0.0 或更新版本**。插件在应用内置的 QuickJS 里运行，不需要 Node.js、服务端、API 密钥或额外程序。
 
 - **方式一（推荐）**：打开 **设置 → 插件 → 从本地文件夹安装…**，选择包含 `plugin.json` 的插件文件夹。如果拿到的是 ZIP，请先解压；不要只选择 `plugin.json` 文件。
-- **方式二**：仓库发布到 GitHub 后，在 **设置 → 插件 → 安装插件** 中粘贴仓库地址，形如 `github.com/<owner>/ypm-plugin-switch`，把 `<owner>` 换成实际仓库所有者。当前项目不内置远程仓库地址；也支持宿主提供的 Release、ZIP 或 `plugin.json` 链接，详见 [插件开发指南](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md)。
+- **方式二**：在 **设置 → 插件 → 安装插件** 中粘贴 `github.com/WooLeo1995/ypm-plugin-switch`，应用会使用最新 Release 里的 `.zip`。也支持 `github.com/WooLeo1995/ypm-plugin-switch/releases/tag/v0.1.0`、ZIP 或 `plugin.json` 链接，详见 [插件开发指南](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md)。
 
 安装前应用会列出插件需要的网络权限（网易云 eapi、GDStudio、网易云 CDN、酷我搜索 / 波点 / 移动 / CDN）。确认并启用后，在 **设置 → 插件 → 音乐来源** 中选择「音源网关」，或点击侧边栏左下角的头像切换。
 

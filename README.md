@@ -22,7 +22,7 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 YesPlayMusic **3.0.0 or newer** is required. The plugin runs in the app's built-in QuickJS engine; no Node.js, server, API key or extra program is needed.
 
 - **Option 1 (recommended)**: open **Settings → Plugins → Install from local folder…** and select the plugin folder that contains `plugin.json`. If you downloaded a ZIP, extract it first; do not select only the `plugin.json` file.
-- **Option 2**: once this project is published on GitHub, open **Settings → Plugins → Install plugin** and paste the repository address in the form `github.com/<owner>/ypm-plugin-switch`, replacing `<owner>` with the actual repository owner. This project does not currently carry a remote repository address. Release, ZIP and `plugin.json` links supported by the host also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
+- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.1.0`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
 
 Before installation the app lists the network permissions the plugin needs (NetEase eapi, GDStudio, NetEase CDN, Kuwo search / Bodian / mobile / CDN). After confirming and enabling it, choose **Source gateway** under **Settings → Plugins → Music source**, or click the avatar at the bottom-left of the sidebar.
 
