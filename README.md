@@ -14,6 +14,7 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 - **Circuit breaker and caching**: repeated failures cool down and recover on success; a track that just failed is not retried immediately.
 - **"Source gateway" sidebar page**: shows per-source sample self-test results and the current fallback order.
 - **Track context menu** (shown only for tracks from this plugin): copy the source direct link or check source availability.
+- **Local playlists without sign-in**: use **Add to playlist → New playlist** in a track's context menu; playlists and track snapshots are stored in the plugin data directory and survive restarts, and tracks can be removed. Rename, drag-to-reorder and delete-playlist are exported through the plugin API; whether the player shows those entries depends on its version.
 - **Nine interface languages**: follows the YesPlayMusic interface language.
 - **No sign-in entry point**: the plugin does not export `account`, `signIn`, `liked` or other account-bound features, and offers no membership, purchase or download capability.
 
@@ -22,7 +23,7 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 YesPlayMusic **3.0.0 or newer** is required. The plugin runs in the app's built-in QuickJS engine; no Node.js, server, API key or extra program is needed.
 
 - **Option 1 (recommended)**: open **Settings → Plugins → Install from local folder…** and select the plugin folder that contains `plugin.json`. If you downloaded a ZIP, extract it first; do not select only the `plugin.json` file.
-- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.1.0`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
+- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.2.0`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
 
 Before installation the app lists the network permissions the plugin needs (NetEase eapi, GDStudio, NetEase CDN, Kuwo search / Bodian / mobile / CDN). After confirming and enabling it, choose **Source gateway** under **Settings → Plugins → Music source**, or click the avatar at the bottom-left of the sidebar.
 
@@ -32,6 +33,15 @@ Before installation the app lists the network permissions the plugin needs (NetE
 2. Double-click a track to play it. The gateway first fills in the title, artists and duration through the anonymous API, then asks the sources for direct links in order; only a link that passes probing is returned to the player.
 3. The **Source gateway** sidebar page shows each source's self-test result and the current fallback order.
 4. In the track context menu, **Copy source direct link** resolves and copies a currently usable link; **Check source availability** tries immediately and reports the result.
+
+### Local playlists
+
+Local playlists need no sign-in and are not synced to a NetEase account:
+
+1. In a track's context menu choose **Add to playlist**, then **New playlist**, and enter a name to create a playlist containing that track. Tracks can also be added to an existing local playlist.
+2. Local playlists appear on the **Playlists** page of the music library. Open one to play it, or remove tracks from it.
+3. Playback still goes through the source gateway: a local playlist stores only metadata snapshots, never audio, so whether a track plays depends on whether a source offers a playable direct link.
+4. Rename, drag-to-reorder and delete-playlist are exported by the plugin; whether their interface entries appear depends on the player version. The YesPlayMusic 3.0.0 interface currently offers creating a playlist, adding tracks and removing tracks from a playlist.
 
 The catalog and the sources are independent layers: a track being in the catalog does not mean a third-party source has its rights or a matching resource. If no enabled source can provide a playable link, the plugin reports "No playable source is available. Try again later." and the player skips the track. That is expected behavior, not a bug.
 
@@ -110,13 +120,17 @@ The keyword source can search normally but did not match the sample in its own c
 **Does the plugin download or cache audio?**
 No. Audio is requested by the YesPlayMusic player directly from the CDN URL returned by the source. The plugin only performs availability probes on candidate links and caches links, metadata and health state — never audio files.
 
+**Are local playlists synced to my NetEase account?**
+No. They live only in the plugin data directory on this machine; no sign-in is needed and nothing is uploaded. A local playlist stores metadata snapshots only, not audio, so whether a track plays still depends on the sources. Uninstalling the plugin or clearing its data removes the playlists, so do not use them as a cloud backup.
+
 ## Privacy and compliance
 
 - **No sign-in**: no account credentials, cookies, tokens or passwords are requested or stored; catalog requests use the anonymous eapi.
 - **Pre-playback probing**: only a lightweight probe is sent to a candidate link (`HEAD`, or a one-byte `Range GET` when needed); the full audio is never read.
 - **Minimal network access**: the plugin only contacts the domains declared in `plugin.json` (NetEase eapi, GDStudio, NetEase CDN, Kuwo search / Bodian / mobile / CDN).
 - **No downloads, no audio redistribution**: the plugin resolves links and probes their availability; playback is done by the host player. It bundles, caches and redistributes no audio files.
-- **Local data**: the plugin data directory stores only a randomly generated device identifier and source health state; direct-link and failure caches live in memory and disappear when the app exits.
+- **Local playlists**: playlist names, track metadata snapshots and timestamps are stored only in `host.storage` inside the plugin data directory; they are not uploaded and are not tied to a NetEase account. Limits: at most 100 playlists, 2000 tracks per playlist, and about 6 MB of total data. No audio is stored; playback is still resolved by the source gateway.
+- **Local data**: the plugin data directory stores only a randomly generated device identifier, source health state and local playlist data; direct-link and failure caches live in memory and disappear when the app exits.
 - **Third-party services**: requests reach the endpoints above, which may log request information under their own terms and privacy policies. Follow the applicable terms of service and local law. Catalog metadata and audio remain the property of their respective rights holders.
 
 ## Development

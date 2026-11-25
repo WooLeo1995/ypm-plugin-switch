@@ -147,12 +147,15 @@ test("index.js：宿主函数齐全，且不导出任何登录能力", async () 
   for (const name of [
     "search", "suggest", "hotSearches", "home", "browse",
     "album", "artist", "playlist", "lyrics", "stream",
+    "playlists", "createPlaylist", "renamePlaylist", "deletePlaylist",
+    "addToPlaylist", "removeFromPlaylist", "movePlaylistTrack",
     "trackMenu", "menuAction", "testConnection",
   ]) {
     assert.equal(typeof api[name], "function", `缺少导出 ${name}`);
   }
+  // playlists 是本插件的本地歌单，不是登录态能力；其余登录相关导出必须不存在。
   for (const name of [
-    "account", "signIn", "signOut", "liked", "playlists", "recent",
+    "account", "signIn", "signOut", "liked", "recent",
     "isLiked", "like", "savedAlbums", "saveAlbum", "login", "logout", "user", "cloud",
   ]) {
     assert.equal(name in api, false, `不应导出登录能力 ${name}`);

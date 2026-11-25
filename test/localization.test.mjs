@@ -81,7 +81,11 @@ test("源码与 plugin.json 的中文 UI 文案 key 集合稳定，样例元数�
   assert.ok(keys.length > 60, `key 数量异常偏少：${keys.length}`);
   assert.equal(keys.length, new Set(keys).size);
   for (const excluded of NON_UI) assert.ok(!keys.includes(excluded), `不应把非 UI 文案当作 key：${excluded}`);
-  for (const key of ["音源网关", "未知歌曲", "没有可用音源，请稍后重试", "GDStudio 音源", "音源"]) {
+  for (const key of [
+    "音源网关", "未知歌曲", "没有可用音源，请稍后重试", "GDStudio 音源", "音源",
+    // catalog/playlists.js 的本地歌单文案也必须进入词表。
+    "本地歌单", "歌单名称不能为空", "最多创建 {count} 个歌单", "单个歌单最多 {count} 首歌曲",
+  ]) {
     assert.ok(keys.includes(key), `缺少预期 key：${key}`);
   }
   assert.ok(keys.every((key) => key.length > 0 && CJK.test(key)));

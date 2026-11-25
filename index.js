@@ -2,6 +2,7 @@
 import { t } from "./i18n.js";
 import { fail } from "./catalog/client.js";
 import * as library from "./catalog/library.js";
+import * as localPlaylists from "./catalog/playlists.js";
 import { qualityLabel } from "./gateway/quality.js";
 import { resolveStream, trackForGateway } from "./gateway/index.js";
 import { browseSources, runSelfTest } from "./gateway/selftest.js";
@@ -9,8 +10,23 @@ import { browseSources, runSelfTest } from "./gateway/selftest.js";
 // 纯 ASCII：方便从应用标准输出确认插件确实被加载，也不进入本地化词表。
 console.info("[switch] source gateway loaded");
 
-export { search, suggest, hotSearches, home, album, artist, playlist, lyrics } from "./catalog/library.js";
+export { search, suggest, hotSearches, home, album, artist, lyrics } from "./catalog/library.js";
+export {
+  playlists,
+  createPlaylist,
+  renamePlaylist,
+  deletePlaylist,
+  addToPlaylist,
+  removeFromPlaylist,
+  movePlaylistTrack,
+} from "./catalog/playlists.js";
 export { stream } from "./stream.js";
+
+// 网易云歌单（数字编号）与本地歌单（local-<n>）共用宿主这个入口。
+export async function playlist({ id } = {}) {
+  if (localPlaylists.isLocalPlaylistId(id)) return localPlaylists.localPlaylist({ id });
+  return library.playlist({ id });
+}
 
 export async function browse({ page = "" } = {}) {
   const value = String(page || "");

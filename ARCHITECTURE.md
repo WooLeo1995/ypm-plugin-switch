@@ -23,10 +23,11 @@
 plugin.json                插件清单与网络权限
 index.js                   宿主导出入口（只做转发与菜单）
 i18n.js                    host.t 包装
-catalog/                   网易云匿名曲库
+catalog/                   网易云匿名曲库 + 本地歌单
   client.js                eapi 客户端（AES-128-ECB + MD5 摘要）
   models.js                Track / Album / Artist / Playlist 映射与元数据缓存
   library.js               search / home / browse / album / artist / playlist / lyrics
+  playlists.js             免登录本地歌单：创建、改名、加歌、移歌、删除（host.storage）
 gateway/                   音源网关
   index.js                 resolveStream：排序、预算、缓存、熔断、探测、回退
   registry.js              音源注册表与排序（读取设置）
@@ -58,7 +59,11 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 | `hotSearches()` | 热门搜索 |
 | `home()` | 推荐歌单、推荐新歌、发现入口 |
 | `browse({ page })` | `""`、`charts`、`top:<id>`、`new-albums`、`playlists:<分类>:<偏移>`、`sources` |
-| `album({ id })` / `artist({ id })` / `playlist({ id })` | 详情 |
+| `album({ id })` / `artist({ id })` | 详情 |
+| `playlist({ id })` | 详情；`local-<n>` 读本地歌单，数字编号读网易云歌单 |
+| `playlists()` | 本地歌单列表（音乐库「歌单」页使用） |
+| `createPlaylist({ name })` / `renamePlaylist({ id, name })` / `deletePlaylist({ id })` | 创建 / 改名 / 删除本地歌单 |
+| `addToPlaylist({ id, trackIds })` / `removeFromPlaylist({ id, trackIds })` / `movePlaylistTrack({ id, from, to })` | 加歌 / 移歌 / 排序 |
 | `lyrics({ id })` | 原文 + 翻译 LRC |
 | `stream({ id, quality })` | 网关解析出的 `AudioStream` |
 | `trackMenu({ track })` / `menuAction({ id, track })` | 复制直链 / 检测音源 |
@@ -66,6 +71,22 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 
 **不导出** `account` / `signIn` / `signOut` / `liked` / `playlists` / `recent` 等需要登录的
 能力，安装后不会出现登录入口。
+
+## 本地歌单
+
+曲库来自网易云，但歌单写入没有账号可依赖，所以歌单完全存在插件自己的数据目录里：
+
+- **存储**：`host.storage` 的 `localPlaylists` 键，结构为
+  `{ next, items: [{ id: "local-<n>", name, createdAt, updatedAt, tracks: [快照] }] }`。
+  歌曲快照只保留 `id / name / artists / album / duration / url`，不存音频、不上传。
+- **编号**：只接受 `local-<n>`；`playlist(id)` 按前缀路由，数字编号仍走网易云歌单详情。
+- **上限**：最多 100 个歌单、单个歌单最多 2000 首、序列化总量约 6 MB，超出时给出明确错误。
+- **去重**：同一首歌重复加入会被跳过；`removeFromPlaylist` 按歌曲 id 移除。
+- **容错**：storage 内容损坏时按空歌单处理，不影响插件其他功能。
+- **宿主交互**：歌曲右键「添加到歌单 → 新建歌单」需要同时导出 `addToPlaylist` 与
+  `createPlaylist`；音乐库「歌单」页直接展示 `playlists()`；`playlist(id)` 返回带
+  `tracks` 的歌单。播放本地歌单里的歌仍然走音源网关，不依赖歌单里的快照是否能联网刷新。
+- **不做**：不导出 `savePlaylist`（收藏别人的歌单需要账号），不把本地歌单同步到任何账号。
 
 ## 音源接口
 
@@ -229,8 +250,8 @@ mobi.kuwo.cn                  酷我移动
 开发时用三层验证，全部在仓库内可复现：
 
 1. **离线测试**：`node --experimental-vm-modules --test test/*.test.mjs`
-   46 条，覆盖清单、曲库映射、匹配规则、网关排序 / 熔断 / 缓存 / 探测、菜单、自检与
-   9 语言本地化，不访问真实网络。
+   59 条，覆盖清单、曲库映射、本地歌单（创建 / 加歌 / 改名 / 删除 / 排序 / 上限 / 坏数据）、
+   匹配规则、网关排序 / 熔断 / 缓存 / 探测、菜单、自检与 9 语言本地化，不访问真实网络。
 2. **实网冒烟**：`node scripts/live-check.mjs`
    31 项，真实请求曲库与音源，校验搜索、三档音质、缓存命中、无源歌曲、自检页、设置
    顺序、运行期主机是否都在网络权限内；断网时明确失败并退出。

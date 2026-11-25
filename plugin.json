@@ -1,8 +1,8 @@
 {
   "id": "switch",
   "name": "音源网关",
-  "version": "0.1.1",
-  "description": "免登录的网易云曲库与多音源网关。内置 GDStudio 与酷我音源，播放前逐个校验直链并自动切换。",
+  "version": "0.2.0",
+  "description": "免登录的网易云曲库与多音源网关。内置 GDStudio 与酷我音源，播放前逐个校验直链并自动切换；支持本地歌单。",
   "author": "ypm-plugin-switch",
   "repository": "https://github.com/WooLeo1995/ypm-plugin-switch",
   "icon": "icon.png",
