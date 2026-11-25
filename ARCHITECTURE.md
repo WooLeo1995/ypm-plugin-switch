@@ -64,29 +64,43 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 | `playlists()` | 本地歌单列表（音乐库「歌单」页使用） |
 | `createPlaylist({ name })` / `renamePlaylist({ id, name })` / `deletePlaylist({ id })` | 创建 / 改名 / 删除本地歌单 |
 | `addToPlaylist({ id, trackIds })` / `removeFromPlaylist({ id, trackIds })` / `movePlaylistTrack({ id, from, to })` | 加歌 / 移歌 / 排序 |
+| `liked({ offset })` | 「我喜欢的音乐」分页（每页 50，新→旧） |
+| `isLiked({ ids })` | `{ id: boolean }`，决定爱心是否点亮 |
+| `like({ id, on })` | 加入 / 移出「我喜欢的音乐」 |
+| `savePlaylist({ id, on })` | 收藏 / 取消收藏某个网易云歌单（只存卡片元数据） |
 | `lyrics({ id })` | 原文 + 翻译 LRC |
 | `stream({ id, quality })` | 网关解析出的 `AudioStream` |
 | `trackMenu({ track })` / `menuAction({ id, track })` | 复制直链 / 检测音源 |
 | `testConnection({ settings })` | 3.1.0+，逐个音源自检 |
 
-**不导出** `account` / `signIn` / `signOut` / `liked` / `playlists` / `recent` 等需要登录的
-能力，安装后不会出现登录入口。
+**不导出** `account` / `signIn` / `signOut` / `recent` 等账号能力，安装后不会出现登录入口；
+这里导出的 `liked` / `playlists` / `like` 都是本地实现，不依赖任何账号。
 
 ## 本地歌单
 
 曲库来自网易云，但歌单写入没有账号可依赖，所以歌单完全存在插件自己的数据目录里：
 
 - **存储**：`host.storage` 的 `localPlaylists` 键，结构为
-  `{ next, items: [{ id: "local-<n>", name, createdAt, updatedAt, tracks: [快照] }] }`。
+  `{ next, items: [{ id: "local-<n>" | "local-liked", name, createdAt, updatedAt, fixed, tracks: [快照] }] }`。
   歌曲快照只保留 `id / name / artists / album / duration / url`，不存音频、不上传。
-- **编号**：只接受 `local-<n>`；`playlist(id)` 按前缀路由，数字编号仍走网易云歌单详情。
-- **上限**：最多 100 个歌单、单个歌单最多 2000 首、序列化总量约 6 MB，超出时给出明确错误。
+- **编号**：只接受 `local-<n>` 与内置的 `local-liked`；`playlist(id)` 按前缀路由，数字编号仍走网易云歌单详情。
+- **我喜欢的音乐**：`local-liked` 是固定歌单（`fixed: true`），始终排在 `playlists()` 第一位，
+  名称由文案 `我喜欢的音乐` 提供，不能改名 / 删除；`like` 加入时插到最前，`removeFromPlaylist`
+  等价取消喜欢。爱心状态由 `isLiked` 批量返回，`liked()` 给音乐库和「喜欢的音乐」页分页。
+- **上限**：最多 100 个自建歌单（固定的喜欢歌单不占额度）、单个歌单最多 2000 首、
+  序列化总量约 6 MB，超出时给出明确错误。
 - **去重**：同一首歌重复加入会被跳过；`removeFromPlaylist` 按歌曲 id 移除。
 - **容错**：storage 内容损坏时按空歌单处理，不影响插件其他功能。
 - **宿主交互**：歌曲右键「添加到歌单 → 新建歌单」需要同时导出 `addToPlaylist` 与
   `createPlaylist`；音乐库「歌单」页直接展示 `playlists()`；`playlist(id)` 返回带
   `tracks` 的歌单。播放本地歌单里的歌仍然走音源网关，不依赖歌单里的快照是否能联网刷新。
-- **不做**：不导出 `savePlaylist`（收藏别人的歌单需要账号），不把本地歌单同步到任何账号。
+- **收藏歌单**：`savePlaylist` 把网易云歌单的卡片元数据（id / 名称 / 封面 / 作者 / 曲目数 /
+  收藏时间）存在 `host.storage` 的 `savedPlaylists` 键，最多 500 个，不占自建歌单额度；
+  `playlists()` 在自建歌单之后返回它们（`saved: true`、`mine: false`），打开时仍实时读取
+  网易云歌单详情。3.0.0 没有原生收藏按钮，所以 `trackMenu` 在「正在看某个网易云歌单」时
+  追加「收藏歌单 / 取消收藏歌单」条目，`menuAction` 完成收藏并提示；本地歌单与喜欢歌单
+  不显示该条目。不登录、不同步账号。
+- **边界**：收藏的是别人的歌单，不能改名/删除；网易云下架后打开会正常报错。
 
 ## 音源接口
 
@@ -250,8 +264,8 @@ mobi.kuwo.cn                  酷我移动
 开发时用三层验证，全部在仓库内可复现：
 
 1. **离线测试**：`node --experimental-vm-modules --test test/*.test.mjs`
-   59 条，覆盖清单、曲库映射、本地歌单（创建 / 加歌 / 改名 / 删除 / 排序 / 上限 / 坏数据）、
-   匹配规则、网关排序 / 熔断 / 缓存 / 探测、菜单、自检与 9 语言本地化，不访问真实网络。
+   83 条，覆盖清单、曲库映射、本地歌单与「我喜欢的音乐」、收藏歌单、匹配规则、
+   网关排序 / 熔断 / 缓存 / 探测、菜单、自检与 9 语言本地化，不访问真实网络。
 2. **实网冒烟**：`node scripts/live-check.mjs`
    31 项，真实请求曲库与音源，校验搜索、三档音质、缓存命中、无源歌曲、自检页、设置
    顺序、运行期主机是否都在网络权限内；断网时明确失败并退出。

@@ -19,6 +19,10 @@ export {
   addToPlaylist,
   removeFromPlaylist,
   movePlaylistTrack,
+  liked,
+  isLiked,
+  like,
+  savePlaylist,
 } from "./catalog/playlists.js";
 export { stream } from "./stream.js";
 
@@ -34,20 +38,37 @@ export async function browse({ page = "" } = {}) {
   return library.browse({ page: value });
 }
 
-export function trackMenu({ track } = {}) {
+export function trackMenu({ track, playlist } = {}) {
   // 有曲目信息时只给自己的曲目加菜单；本地音乐或其他音源的 ID 不是网易云编号。
   // 宿主没传曲目（例如只问菜单定义）时照常返回条目。
   if (track) {
     if (!/^\d+$/.test(String(track.id ?? ""))) return [];
     if (track.source && track.source !== "switch") return [];
   }
-  return [
+  const items = [
     { id: "switch.copy", title: t("复制音源直链") },
     { id: "switch.test", title: t("检测音源可用性") },
   ];
+  // 正在看某个网易云歌单时，给「收藏 / 取消收藏歌单」一个入口。
+  // 本地歌单与喜欢歌单不能收藏；只读 storage，不联网。
+  const playlistId = String(playlist ?? "");
+  if (/^\d+$/.test(playlistId)) {
+    items.push({
+      id: "switch.save-playlist",
+      title: localPlaylists.isSavedPlaylist(playlistId) ? t("取消收藏歌单") : t("收藏歌单"),
+    });
+  }
+  return items;
 }
 
-export async function menuAction({ id: action, track } = {}) {
+export async function menuAction({ id: action, track, playlist } = {}) {
+  if (action === "switch.save-playlist") {
+    const playlistId = String(playlist ?? "");
+    if (!/^\d+$/.test(playlistId)) fail("unsupported", "未知菜单操作");
+    const saved = localPlaylists.isSavedPlaylist(playlistId);
+    await localPlaylists.savePlaylist({ id: playlistId, on: !saved });
+    return { toast: saved ? t("已取消收藏") : t("已收藏歌单") };
+  }
   if (action !== "switch.copy" && action !== "switch.test") fail("unsupported", "未知菜单操作");
   const stream = await resolveStream({ track: trackForGateway(track), quality: "high" });
   const quality = t(qualityLabel(stream.quality));

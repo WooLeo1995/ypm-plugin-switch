@@ -93,17 +93,19 @@ test("plugin.json：id、入口文件、图标、版本与播放能力合法", (
   assert.equal(manifest.playback, "stream");
   assert.equal(manifest.minAppVersion, "3.0.0");
   assert.ok(versionAtLeast(manifest.minAppVersion, "3.0.0"));
+  // 喜欢歌单与 local-liked 从 0.3.0 起提供。
+  assert.ok(versionAtLeast(manifest.version, "0.3.0"), `当前版本 ${manifest.version}`);
 });
 
-test("plugin.json：导航不出现登录页，设置项与默认值完整", () => {
+test("plugin.json：导航包含首页与喜欢页且不出现其它登录页，设置项与默认值完整", () => {
   assert.ok(Array.isArray(manifest.navigation) && manifest.navigation.length >= 2);
-  assert.ok(manifest.navigation.some((entry) => entry.builtin === "home"));
+  // 首页与本地喜欢页是内置入口；登录相关页面（我的音乐、收藏专辑等）不能出现。
+  assert.deepEqual(
+    manifest.navigation.filter((entry) => entry.builtin).map((entry) => entry.builtin).sort(),
+    ["home", "liked"],
+  );
   const sources = manifest.navigation.find((entry) => entry.page === "sources");
   assert.equal(sources.title, "音源网关");
-  // 登录相关内置页面（我的音乐、收藏专辑等）不能出现。
-  for (const entry of manifest.navigation) {
-    if (entry.builtin) assert.equal(entry.builtin, "home", `不应暴露 ${entry.builtin} 登录页`);
-  }
 
   assert.deepEqual(manifest.settings.map((item) => item.key), [
     "quality",
@@ -149,14 +151,15 @@ test("index.js：宿主函数齐全，且不导出任何登录能力", async () 
     "album", "artist", "playlist", "lyrics", "stream",
     "playlists", "createPlaylist", "renamePlaylist", "deletePlaylist",
     "addToPlaylist", "removeFromPlaylist", "movePlaylistTrack",
+    "liked", "isLiked", "like", "savePlaylist",
     "trackMenu", "menuAction", "testConnection",
   ]) {
     assert.equal(typeof api[name], "function", `缺少导出 ${name}`);
   }
-  // playlists 是本插件的本地歌单，不是登录态能力；其余登录相关导出必须不存在。
+  // playlists / liked / isLiked / like 是本地歌单能力，不是登录态能力；其余登录相关导出必须不存在。
   for (const name of [
-    "account", "signIn", "signOut", "liked", "recent",
-    "isLiked", "like", "savedAlbums", "saveAlbum", "login", "logout", "user", "cloud",
+    "account", "signIn", "signOut", "recent",
+    "savedAlbums", "saveAlbum", "login", "logout", "user", "cloud",
   ]) {
     assert.equal(name in api, false, `不应导出登录能力 ${name}`);
   }

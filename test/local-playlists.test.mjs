@@ -66,12 +66,13 @@ test("createPlaylist：id 形如 local-N、mine=true、trackCount=0，空名称�
 
   const state = snapshotJson(r);
   assert.equal(state.next, 5);
-  assert.deepEqual(state.items.map((item) => item.id), ["local-4", "local-3", "local-2", "local-1"]);
+  assert.deepEqual(state.items.map((item) => item.id), ["local-4", "local-3", "local-2", "local-1", "local-liked"]);
   assert.deepEqual(plain(state.items[3]), {
     id: "local-1",
     name: "我的歌单",
     createdAt: r.clock.now() - 1000,
     updatedAt: r.clock.now() - 1000,
+    fixed: false,
     tracks: [],
   });
   assert.equal(state.items[0].createdAt, r.clock.now());
@@ -80,7 +81,7 @@ test("createPlaylist：id 形如 local-N、mine=true、trackCount=0，空名称�
   for (const name of [undefined, "", "   "]) {
     await rejects(Promise.resolve().then(() => r.plugin.createPlaylist({ name })), "failed", "歌单名称不能为空");
   }
-  assert.equal(snapshotJson(r).items.length, 4);
+  assert.equal(snapshotJson(r).items.length, 5);
   assert.equal(r.requests.length, before);
 });
 
@@ -92,8 +93,9 @@ test("playlists() 新歌单在前；playlist(local-id) 返回本地曲目，数�
   }
 
   const list = plain(r.plugin.playlists());
-  assert.deepEqual(list.map((item) => item.id), ["local-3", "local-2", "local-1"]);
-  assert.deepEqual(list.map((item) => item.name), ["最新-2", "中间-1", "最早-0"]);
+  assert.deepEqual(list.map((item) => item.id), ["local-liked", "local-3", "local-2", "local-1"]);
+  assert.deepEqual(list.map((item) => item.name), ["我喜欢的音乐", "最新-2", "中间-1", "最早-0"]);
+  assert.deepEqual(list.map((item) => item.fixed), [true, false, false, false]);
   assert.ok(list.every((item) => item.mine === true && item.trackCount === 0));
 
   stubSongDetail(r, { 42: song(42), 43: song(43) });
@@ -140,7 +142,7 @@ test("addToPlaylist：首次拉 eapi 详情写快照，去重，缓存命中不�
   const detailRequest = r.requests.find((request) => request.url.endsWith("/eapi/v3/song/detail"));
   assert.deepEqual(JSON.parse(detailRequest.payload.c), [{ id: "42" }, { id: "43" }]);
 
-  const listSummary = plain(r.plugin.playlists())[0];
+  const listSummary = plain(r.plugin.playlists()).find((item) => item.id === "local-1");
   assert.equal(listSummary.trackCount, 2);
   assert.equal(listSummary.imageUrl, "https://p1.music.126.net/cover.jpg");
 
@@ -273,7 +275,7 @@ test("renamePlaylist：改名保留创建时间并更新时间；非法名称/�
     "unavailable",
     "歌单不存在，或没有访问权限",
   );
-  assert.equal(plain(r.plugin.playlists())[0].name, "新名字");
+  assert.equal(plain(r.plugin.playlists()).find((item) => item.id === "local-1").name, "新名字");
 });
 
 test("deletePlaylist：删除后从列表消失，不存在的 id 幂等返回空对象", async () => {
@@ -282,18 +284,19 @@ test("deletePlaylist：删除后从列表消失，不存在的 id 幂等返回�
   r.plugin.createPlaylist({ name: "删除" });
 
   assert.deepEqual(plain(r.plugin.deletePlaylist({ id: "local-2" })), {});
-  assert.deepEqual(plain(r.plugin.playlists()).map((item) => item.id), ["local-1"]);
-  assert.deepEqual(snapshotJson(r).items.map((item) => item.id), ["local-1"]);
+  assert.deepEqual(plain(r.plugin.playlists()).map((item) => item.id), ["local-liked", "local-1"]);
+  assert.deepEqual(snapshotJson(r).items.map((item) => item.id), ["local-1", "local-liked"]);
 
   // 幂等：再删一次、删不存在/非法 id 都返回空对象，不影响其它歌单。
   for (const id of ["local-2", "local-999", "不存在", 123, undefined]) {
     assert.deepEqual(plain(r.plugin.deletePlaylist({ id })), {});
   }
-  assert.deepEqual(plain(r.plugin.playlists()).map((item) => item.id), ["local-1"]);
+  assert.deepEqual(plain(r.plugin.playlists()).map((item) => item.id), ["local-liked", "local-1"]);
 
   assert.deepEqual(plain(r.plugin.deletePlaylist({ id: "local-1" })), {});
-  assert.deepEqual(plain(r.plugin.playlists()), []);
-  assert.equal(snapshotJson(r).items.length, 0);
+  assert.deepEqual(plain(r.plugin.playlists()).map((item) => item.id), ["local-liked"]);
+  assert.equal(snapshotJson(r).items.length, 1);
+  assert.equal(snapshotJson(r).items[0].id, "local-liked");
 });
 
 test("removeFromPlaylist：按 trackId 移除；空数组与不存在曲目是 no-op", async () => {
@@ -379,7 +382,9 @@ test("上限：最多 100 个歌单；创建失败时 storage 不变", async () 
     tracks: [],
   }));
   const r = await runtime({ storage: { [STORAGE_KEY]: { next: 101, items } } });
-  assert.equal(r.plugin.playlists().length, 100);
+  // 100 个普通歌单 + 内置喜欢歌单（只读视图合成，不落盘）。
+  assert.equal(r.plugin.playlists().length, 101);
+  assert.equal(plain(r.plugin.playlists())[0].id, "local-liked");
 
   await rejects(Promise.resolve().then(() => r.plugin.createPlaylist({ name: "第 101 个" })), "failed", "最多创建 100 个歌单");
   assert.equal(snapshotJson(r).items.length, 100);
@@ -390,7 +395,9 @@ test("上限：最多 100 个歌单；创建失败时 storage 不变", async () 
   r.clock.advance(1000);
   const created = plain(r.plugin.createPlaylist({ name: "补位" }));
   assert.equal(created.id, "local-101");
-  assert.equal(r.plugin.playlists().length, 100);
+  assert.equal(r.plugin.playlists().length, 101);
+  assert.equal(plain(r.plugin.playlists())[0].id, "local-liked");
+  assert.equal(plain(r.plugin.playlists()).filter((item) => item.fixed).length, 1);
 });
 
 test("上限：单个歌单最多 2000 首；已有曲目仍可重复添加/移除", async () => {
@@ -421,7 +428,7 @@ test("上限：单个歌单最多 2000 首；已有曲目仍可重复添加/移�
   const summary = await r.plugin.addToPlaylist({ id: "local-1", trackIds: [1, 2] });
   assert.equal(summary.trackCount, 2000);
   r.plugin.removeFromPlaylist({ id: "local-1", trackIds: [1] });
-  assert.equal(plain(r.plugin.playlists())[0].trackCount, 1999);
+  assert.equal(plain(r.plugin.playlists()).find((item) => item.id === "local-1").trackCount, 1999);
 });
 
 test("上限：序列化超过 6MB 时保存失败且不覆盖原数据", async () => {
@@ -436,7 +443,7 @@ test("上限：序列化超过 6MB 时保存失败且不覆盖原数据", async 
   assert.equal(stored.items[0].id, "local-1");
 });
 
-test("损坏 storage：字符串/缺 items/非法 id 返回空列表，并能重新创建歌单", async () => {
+test("损坏 storage：字符串/缺 items/非法 id 时只剩内置喜欢歌单，并能重新创建歌单", async () => {
   const cases = [
     ["字符串", "broken"],
     ["数字", 42],
@@ -456,15 +463,20 @@ test("损坏 storage：字符串/缺 items/非法 id 返回空列表，并能重
     }
     assert.ok(Array.isArray(list), `${label}: 应返回数组`);
     if (label === "缺 tracks") {
-      assert.deepEqual(list.map((item) => item.id), ["local-2"]);
-      assert.equal(list[0].trackCount, 0);
+      assert.deepEqual(list.map((item) => item.id), ["local-liked", "local-2"]);
+      const kept = list.find((item) => item.id === "local-2");
+      assert.equal(kept.trackCount, 0);
+      assert.equal(kept.fixed, false);
     } else {
-      assert.deepEqual(list, [], `${label}: 应返回空列表`);
+      assert.deepEqual(list.map((item) => item.id), ["local-liked"], `${label}: 只剩内置喜欢歌单`);
     }
+    assert.equal(list[0].name, "我喜欢的音乐");
 
     const created = plain(r.plugin.createPlaylist({ name: "重建歌单" }));
     assert.ok(/^local-\d+$/.test(created.id), `${label}: 新编号合法`);
-    assert.equal(plain(r.plugin.playlists())[0].name, "重建歌单");
+    const createdSummary = plain(r.plugin.playlists()).find((item) => item.id === created.id);
+    assert.equal(createdSummary.name, "重建歌单");
+    assert.equal(createdSummary.fixed, false);
     const stored = plain(r.store.get(STORAGE_KEY));
     assert.ok(Array.isArray(stored.items), `${label}: storage 应被修复为对象`);
     assert.equal(stored.items[0].id, created.id);
