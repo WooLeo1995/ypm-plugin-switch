@@ -424,11 +424,16 @@ async function main() {
   }
 
   await check("插件导出的宿主页接口", () => {
-    const missing = ["search", "stream", "browse", "testConnection"].filter((name) => typeof plugin[name] !== "function");
+    const required = [
+      "search", "stream", "browse", "testConnection", "trackMenu", "menuAction",
+      "playlists", "playlist", "createPlaylist", "addToPlaylist",
+      "liked", "isLiked", "like", "savePlaylist",
+    ];
+    const missing = required.filter((name) => typeof plugin[name] !== "function");
     if (missing.length) throw new Error(`缺少导出：${missing.join(", ")}`);
-    const irrelevant = ["account", "signIn", "liked"].filter((name) => typeof plugin[name] === "function");
-    if (irrelevant.length) throw new Error(`不应导出登录能力：${irrelevant.join(", ")}`);
-    return "search/stream/browse/testConnection 齐全，无登录能力";
+    const irrelevant = ["account", "signIn", "signOut"].filter((name) => typeof plugin[name] === "function");
+    if (irrelevant.length) throw new Error(`不应导出账号能力：${irrelevant.join(", ")}`);
+    return "曲库 / 网关 / 本地歌单 / 喜欢 / 收藏接口齐全，无账号能力";
   });
 
   // 4. 真实搜索（4 位不同歌手）

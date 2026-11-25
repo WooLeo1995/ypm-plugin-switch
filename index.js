@@ -28,8 +28,22 @@ export { stream } from "./stream.js";
 
 // 网易云歌单（数字编号）与本地歌单（local-<n>）共用宿主这个入口。
 export async function playlist({ id } = {}) {
-  if (localPlaylists.isLocalPlaylistId(id)) return localPlaylists.localPlaylist({ id });
-  return library.playlist({ id });
+  if (localPlaylists.isLocalPlaylistId(id)) {
+    localPlaylists.clearPlaylistContext();
+    return localPlaylists.localPlaylist({ id });
+  }
+  const detail = await library.playlist({ id });
+  // 记录上下文，供「收藏歌单」右键菜单判断（宿主对其他人的歌单不传 playlist id）。
+  localPlaylists.rememberPlaylistContext(detail);
+  return detail;
+}
+
+function saveTargetFor(track, playlistId) {
+  const param = String(playlistId ?? "");
+  // 宿主显式传了歌单 id：数字是网易云歌单，其余（local-*、喜欢歌单）都不可收藏，
+  // 不能回退到「最近打开的歌单」上下文。
+  if (param) return /^\d+$/.test(param) ? { id: param, name: "" } : null;
+  return localPlaylists.playlistContextFor(track?.id);
 }
 
 export async function browse({ page = "" } = {}) {
@@ -50,23 +64,24 @@ export function trackMenu({ track, playlist } = {}) {
     { id: "switch.test", title: t("检测音源可用性") },
   ];
   // 正在看某个网易云歌单时，给「收藏 / 取消收藏歌单」一个入口。
-  // 本地歌单与喜欢歌单不能收藏；只读 storage，不联网。
-  const playlistId = String(playlist ?? "");
-  if (/^\d+$/.test(playlistId)) {
-    items.push({
-      id: "switch.save-playlist",
-      title: localPlaylists.isSavedPlaylist(playlistId) ? t("取消收藏歌单") : t("收藏歌单"),
-    });
+  // 本地歌单与喜欢歌单不能收藏；只读内存与 storage，不联网。
+  const target = saveTargetFor(track, playlist);
+  if (target) {
+    const saved = localPlaylists.isSavedPlaylist(target.id);
+    const title = target.name
+      ? t(saved ? "取消收藏歌单：{name}" : "收藏歌单：{name}", { name: target.name })
+      : t(saved ? "取消收藏歌单" : "收藏歌单");
+    items.push({ id: "switch.save-playlist", title });
   }
   return items;
 }
 
 export async function menuAction({ id: action, track, playlist } = {}) {
   if (action === "switch.save-playlist") {
-    const playlistId = String(playlist ?? "");
-    if (!/^\d+$/.test(playlistId)) fail("unsupported", "未知菜单操作");
-    const saved = localPlaylists.isSavedPlaylist(playlistId);
-    await localPlaylists.savePlaylist({ id: playlistId, on: !saved });
+    const target = saveTargetFor(track, playlist);
+    if (!target) fail("unsupported", "未知菜单操作");
+    const saved = localPlaylists.isSavedPlaylist(target.id);
+    await localPlaylists.savePlaylist({ id: target.id, on: !saved });
     return { toast: saved ? t("已取消收藏") : t("已收藏歌单") };
   }
   if (action !== "switch.copy" && action !== "switch.test") fail("unsupported", "未知菜单操作");

@@ -65,3 +65,33 @@ test("删除已收藏的网易云歌单 = 取消收藏；未收藏的数字 id �
   r.plugin.deletePlaylist({ id: "999" });
   assert.equal(plain(r.plugin.playlists())[0].id, "local-liked");
 });
+
+test("显式本地歌单参数不会回退到最近打开的歌单上下文", async () => {
+  const r = await runtime();
+  r.route("/eapi/v6/playlist/detail", () => json({
+    code: 200,
+    playlist: {
+      id: 3778678,
+      name: "热歌榜",
+      coverImgUrl: "http://p3.music.126.net/hot.jpg",
+      trackCount: 1,
+      creator: { nickname: "网易云音乐" },
+      trackIds: [{ id: 42 }],
+      tracks: [{ id: 42, name: "晴天", dt: 269000, ar: [{ id: "6452", name: "周杰伦" }], al: { id: "1", name: "叶惠美" } }],
+    },
+  }));
+
+  // 先打开网易云歌单，让上下文里包含曲目 42。
+  const detail = await r.plugin.playlist({ id: 3778678 });
+  assert.equal(detail.tracks.length, 1);
+
+  const track = { id: "42", name: "晴天", artists: [{ id: "6452", name: "周杰伦" }], duration: 269000 };
+  const titles = (playlist) => plain(r.plugin.trackMenu({ track, playlist })).map((item) => item.title);
+
+  // playlist 为空：按上下文显示收藏入口。
+  assert.ok(titles("").some((title) => title.includes("收藏歌单")));
+  // 显式本地歌单：不可收藏，即使曲目在最近打开的歌单里也不能显示。
+  assert.ok(!titles("local-liked").some((title) => title.includes("收藏歌单")));
+  assert.ok(!titles("local-1").some((title) => title.includes("收藏歌单")));
+  assert.ok(!titles("unknown").some((title) => title.includes("收藏歌单")));
+});

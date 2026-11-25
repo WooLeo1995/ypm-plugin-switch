@@ -57,6 +57,41 @@ function savedSummary(item) {
   };
 }
 
+// 宿主在「别人的歌单」页面不会把歌单 id 传给 trackMenu，只传空字符串。
+// 这里记住最近打开的几个网易云歌单及其曲目：宿主有 10 分钟歌单缓存，来回切换时不一定
+// 重新调用 playlist()，所以保留多个上下文，按「曲目属于哪个歌单」反查。
+const CONTEXT_LIMIT = 8;
+let playlistContexts = [];
+
+export function rememberPlaylistContext(playlist) {
+  const id = String(playlist?.id || "");
+  if (!/^\d+$/.test(id)) {
+    playlistContexts = [];
+    return;
+  }
+  const ids = new Set();
+  for (const item of playlist.tracks || []) {
+    const trackId = String(item?.id || "");
+    if (trackId) ids.add(trackId);
+  }
+  playlistContexts = playlistContexts.filter((context) => context.id !== id);
+  playlistContexts.unshift({ id, name: String(playlist.name || ""), ids });
+  if (playlistContexts.length > CONTEXT_LIMIT) playlistContexts.length = CONTEXT_LIMIT;
+}
+
+export function clearPlaylistContext() {
+  playlistContexts = [];
+}
+
+export function playlistContextFor(trackId) {
+  const id = String(trackId ?? "");
+  if (!id) return null;
+  for (const context of playlistContexts) {
+    if (context.ids.has(id)) return { id: context.id, name: context.name };
+  }
+  return null;
+}
+
 export function isSavedPlaylist(value) {
   const id = String(value ?? "");
   return /^\d+$/.test(id) && loadSaved().items.some((item) => item.id === id);

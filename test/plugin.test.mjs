@@ -93,8 +93,8 @@ test("plugin.json：id、入口文件、图标、版本与播放能力合法", (
   assert.equal(manifest.playback, "stream");
   assert.equal(manifest.minAppVersion, "3.0.0");
   assert.ok(versionAtLeast(manifest.minAppVersion, "3.0.0"));
-  // 喜欢歌单与 local-liked 从 0.3.0 起提供。
-  assert.ok(versionAtLeast(manifest.version, "0.3.0"), `当前版本 ${manifest.version}`);
+  // 喜欢歌单从 0.3.0、收藏歌单入口修复从 0.4.1 起提供。
+  assert.ok(versionAtLeast(manifest.version, "0.4.1"), `当前版本 ${manifest.version}`);
 });
 
 test("plugin.json：导航包含首页与喜欢页且不出现其它登录页，设置项与默认值完整", () => {

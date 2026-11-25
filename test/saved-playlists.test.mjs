@@ -46,6 +46,20 @@ const localItem = (index, overrides = {}) => ({
 
 const storedSaved = (r) => plain(r.store.get(SAVED_KEY));
 
+// 打开别人歌单时，宿主拿到的 detail.tracks 决定「收藏歌单」上下文成员集合。
+const playlistWithTracks = (id, name, trackIds) => rawPlaylist(id, {
+  name,
+  trackCount: trackIds.length,
+  trackIds: trackIds.map((trackId) => ({ id: trackId })),
+  tracks: trackIds.map((trackId) => ({
+    id: trackId,
+    name: `列表歌曲${trackId}`,
+    dt: 1000,
+    ar: [],
+    al: {},
+  })),
+});
+
 function stubPlaylistDetail(r, playlists) {
   r.route("/eapi/v6/playlist/detail", (request) => {
     const id = String(request.payload.id);
@@ -204,7 +218,7 @@ test("收藏不占自建 100 上限；收藏本身最多 500 个", async () => {
   assert.equal(storedSaved(r).items[0].id, "501");
 });
 
-test("trackMenu：网易云歌单上下文出现收藏入口，本地歌单/空上下文不出现", async () => {
+test("trackMenu：数字 playlist 参数出现通用收藏入口；本地/非数字参数或无上下文时不出现", async () => {
   const r = await runtime();
   const menu = (options) => plain(r.plugin.trackMenu(options));
   const base = [
@@ -234,7 +248,7 @@ test("trackMenu：网易云歌单上下文出现收藏入口，本地歌单/空�
     { id: "switch.save-playlist", title: "取消收藏歌单" },
   ]);
 
-  // 本地歌单 / 喜欢歌单 / 空 / 非数字 playlist 都不出现收藏入口。
+  // 本地歌单 / 喜欢歌单 / 空 / 非数字 playlist 且没有打开过任何网易云歌单（无上下文）时不出现收藏入口。
   for (const playlist of ["local-liked", "local-1", "", undefined, "abc", "0abc"]) {
     assert.deepEqual(menu({ track: TRACK, playlist }), base, `playlist=${playlist}`);
   }
@@ -401,4 +415,144 @@ test("deletePlaylist 对收藏的网易云歌单等价取消收藏", async () =>
   }
   assert.equal(r.requests.length, count);
   assert.deepEqual(storedSaved(r).items, []);
+});
+
+
+test("歌单上下文：打开网易云歌单后，未传 playlist 的菜单只对该歌单成员出现", async () => {
+  const r = await runtime();
+  const menu = (track) => plain(r.plugin.trackMenu({ track }));
+  const base = [
+    { id: "switch.copy", title: "复制音源直链" },
+    { id: "switch.test", title: "检测音源可用性" },
+  ];
+  stubPlaylistDetail(r, {
+    3778678: playlistWithTracks(3778678, "热歌榜", [42, 43]),
+    1888: playlistWithTracks(1888, "新歌单", [77]),
+    520: playlistWithTracks(520, "空歌单", []),
+  });
+
+  // 全新 runtime 没有上下文：成员 id 也不出现收藏入口。
+  assert.deepEqual(menu(TRACK), base);
+  assert.deepEqual(plain(r.plugin.trackMenu({ track: { id: "43" } })), base);
+
+  // 打开网易云歌单：上下文记录曲目集合。
+  await r.plugin.playlist({ id: "3778678" });
+  const requestCount = r.requests.length;
+  assert.deepEqual(menu(TRACK), [
+    ...base,
+    { id: "switch.save-playlist", title: "收藏歌单：热歌榜" },
+  ]);
+  assert.deepEqual(menu({ id: "43", name: "别的实例" }), [
+    ...base,
+    { id: "switch.save-playlist", title: "收藏歌单：热歌榜" },
+  ]);
+  // 不在该歌单里的曲目不出现；trackMenu 不联网。
+  assert.deepEqual(menu({ id: "999" }), base);
+  assert.deepEqual(plain(r.plugin.trackMenu({ track: { id: "local-1" } })), []);
+  assert.equal(r.requests.length, requestCount, "trackMenu 不应联网");
+
+  // 打开另一个网易云歌单：新歌单成员对应新上下文（实现保留最近几个上下文，
+  // 以适配宿主 10 分钟歌单缓存；这里只断言新歌单成员必然能解析到）。
+  await r.plugin.playlist({ id: "1888" });
+  assert.deepEqual(menu({ id: "77" }), [
+    ...base,
+    { id: "switch.save-playlist", title: "收藏歌单：新歌单" },
+  ]);
+
+  // 打开本地歌单清空全部上下文。
+  r.plugin.createPlaylist({ name: "本地歌单" });
+  await r.plugin.playlist({ id: "local-1" });
+  assert.deepEqual(menu(TRACK), base);
+  assert.deepEqual(menu({ id: "77" }), base);
+  await r.plugin.playlist({ id: "local-liked" });
+  assert.deepEqual(menu({ id: "77" }), base);
+
+  // 打开一个没有曲目的网易云歌单：上下文有歌单但无成员。
+  await r.plugin.playlist({ id: "520" });
+  assert.deepEqual(menu(TRACK), base);
+});
+
+test("歌单上下文：收藏后菜单变「取消收藏歌单：歌单名」，menuAction 也能按上下文收藏/取消", async () => {
+  const r = await runtime();
+  stubPlaylistDetail(r, { 3778678: playlistWithTracks(3778678, "热歌榜", [42, 43]) });
+  await r.plugin.playlist({ id: "3778678" });
+
+  const menuTitles = () => plain(r.plugin.trackMenu({ track: TRACK })).map((item) => item.title);
+  assert.deepEqual(menuTitles(), ["复制音源直链", "检测音源可用性", "收藏歌单：热歌榜"]);
+
+  // 不传 playlist，按上下文解析到 3778678。
+  assert.deepEqual(plain(await r.plugin.menuAction({ id: "switch.save-playlist", track: TRACK })), {
+    toast: "已收藏歌单",
+  });
+  assert.deepEqual(storedSaved(r).items.map((item) => item.id), ["3778678"]);
+  assert.deepEqual(menuTitles(), ["复制音源直链", "检测音源可用性", "取消收藏歌单：热歌榜"]);
+
+  // 再点一次 → 取消收藏。
+  assert.deepEqual(plain(await r.plugin.menuAction({ id: "switch.save-playlist", track: TRACK })), {
+    toast: "已取消收藏",
+  });
+  assert.deepEqual(storedSaved(r).items, []);
+  assert.deepEqual(menuTitles(), ["复制音源直链", "检测音源可用性", "收藏歌单：热歌榜"]);
+
+  // 直接 savePlaylist 保存后，带上下文的菜单同步为取消收藏。
+  await r.plugin.savePlaylist({ id: 3778678, on: true });
+  assert.deepEqual(menuTitles(), ["复制音源直链", "检测音源可用性", "取消收藏歌单：热歌榜"]);
+
+  // 非成员曲目 / 无 track 时无法按上下文解析，menuAction 抛 unsupported。
+  const count = r.requests.length;
+  await rejects(
+    r.plugin.menuAction({ id: "switch.save-playlist", track: { id: "999" } }),
+    "unsupported",
+    "未知菜单操作",
+  );
+  await rejects(
+    r.plugin.menuAction({ id: "switch.save-playlist" }),
+    "unsupported",
+    "未知菜单操作",
+  );
+  assert.equal(r.requests.length, count);
+
+  // 打开本地歌单清空上下文后，同一曲目的 menuAction 也解析不到。
+  r.plugin.createPlaylist({ name: "本地歌单" });
+  await r.plugin.playlist({ id: "local-1" });
+  await rejects(
+    r.plugin.menuAction({ id: "switch.save-playlist", track: TRACK }),
+    "unsupported",
+    "未知菜单操作",
+  );
+});
+
+test("歌单上下文：数字 playlist 参数优先，仍显示通用「收藏歌单/取消收藏歌单」", async () => {
+  const r = await runtime();
+  stubPlaylistDetail(r, {
+    3778678: playlistWithTracks(3778678, "热歌榜", [42]),
+    12345: rawPlaylist(12345),
+  });
+  await r.plugin.playlist({ id: "3778678" });
+
+  const titles = (options) => plain(r.plugin.trackMenu(options)).map((item) => item.title);
+  // 数字参数不带歌单名：即使曲目属于上下文歌单，也只显示通用标题。
+  assert.deepEqual(titles({ track: TRACK, playlist: "12345" }), [
+    "复制音源直链", "检测音源可用性", "收藏歌单",
+  ]);
+  assert.deepEqual(titles({ playlist: 12345 }), [
+    "复制音源直链", "检测音源可用性", "收藏歌单",
+  ]);
+
+  await r.plugin.savePlaylist({ id: "12345", on: true });
+  assert.deepEqual(titles({ track: TRACK, playlist: 12345 }), [
+    "复制音源直链", "检测音源可用性", "取消收藏歌单",
+  ]);
+
+  // 数字参数时 menuAction 也按参数目标收藏，忽略上下文。
+  r.clock.advance(1000);
+  assert.deepEqual(plain(await r.plugin.menuAction({
+    id: "switch.save-playlist",
+    track: TRACK,
+    playlist: "12345",
+  })), { toast: "已取消收藏" });
+  assert.deepEqual(storedSaved(r).items, []);
+  assert.deepEqual(titles({ track: TRACK, playlist: 12345 }), [
+    "复制音源直链", "检测音源可用性", "收藏歌单",
+  ]);
 });

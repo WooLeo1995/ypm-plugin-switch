@@ -16,7 +16,7 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 - **Track context menu** (shown only for tracks from this plugin): copy the source direct link or check source availability.
 - **Local playlists without sign-in**: use **Add to playlist → New playlist** in a track's context menu; playlists and track snapshots are stored in the plugin data directory and survive restarts, and tracks can be removed. Rename, drag-to-reorder and delete-playlist are exported through the plugin API; whether the player shows those entries depends on its version.
 - **Hearts and Liked Songs**: clicking the heart button in the player adds the track to the fixed **Liked Songs** playlist, and clicking it again removes it; the state is stored in the plugin data directory and survives restarts.
-- **Saved playlists**: while browsing a NetEase playlist, the track context menu offers **Save playlist / Unsave playlist**. Saving stores only a snapshot of the playlist's basic information in the plugin data directory — no sign-in, no account sync. Saved playlists appear on the **Playlists** page after user-created playlists, marked as saved, up to 500, and do not count toward the 100 user-created playlist limit.
+- **Saved playlists**: while browsing a NetEase playlist, right-click a **song in that playlist**; the menu shows **Save playlist: playlist name** (or **Unsave playlist: playlist name** when already saved). Saving stores only a snapshot of the playlist's basic information in the plugin data directory — no sign-in, no account sync. Saved playlists appear on the **Playlists** page after user-created playlists, marked as saved, up to 500, and do not count toward the 100 user-created playlist limit.
 - **Nine interface languages**: follows the YesPlayMusic interface language.
 - **No sign-in entry point**: the plugin does not export `account`, `signIn`, `signOut` or other account-bound features, and offers no membership, purchase or download capability.
 
@@ -25,7 +25,7 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 YesPlayMusic **3.0.0 or newer** is required. The plugin runs in the app's built-in QuickJS engine; no Node.js, server, API key or extra program is needed.
 
 - **Option 1 (recommended)**: open **Settings → Plugins → Install from local folder…** and select the plugin folder that contains `plugin.json`. If you downloaded a ZIP, extract it first; do not select only the `plugin.json` file.
-- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.4.0`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
+- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.4.1`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
 
 Before installation the app lists the network permissions the plugin needs (NetEase eapi, GDStudio, NetEase CDN, Kuwo search / Bodian / mobile / CDN). After confirming and enabling it, choose **Source gateway** under **Settings → Plugins → Music source**, or click the avatar at the bottom-left of the sidebar.
 
@@ -49,7 +49,7 @@ Local playlists need no sign-in and are not synced to a NetEase account:
 
 Saved playlists keep NetEase playlists without signing in, and they are not synced to a NetEase account:
 
-1. Open a NetEase playlist and choose **Save playlist** in the track context menu; when the same playlist is saved, the entry becomes **Unsave playlist**. YesPlayMusic 3.0.0 has no native save-playlist button, so this entry only appears in the track context menu while viewing a NetEase playlist.
+1. Open a NetEase playlist and right-click a **track inside that playlist**; the menu shows **Save playlist: playlist name**, or **Unsave playlist: playlist name** when already saved. Click it to save or unsave. The YesPlayMusic 3.0.0 "other people's playlists" page does not pass the playlist ID to the context menu, so the plugin remembers the most recently opened NetEase playlists and their tracks and only shows this entry on tracks that belong to one of them; opening a local playlist or Liked Songs clears this context, so the entry does not appear there. If the host does pass the playlist ID directly, the menu may show the plain **Save playlist / Unsave playlist** entries without the name.
 2. Saved playlists appear on the **Playlists** page of the music library after user-created playlists and are marked as saved. Open one to browse and play it like a normal NetEase playlist; playback still goes through the source gateway.
 3. Saving keeps only a basic snapshot (name, cover, creator, track count and saved time), not the full track list or audio. When you open a saved playlist, its contents are still read from the anonymous NetEase API.
 4. Up to 500 playlists can be saved; this count is separate and does not use the 100 user-created playlist limit. Local playlists and Liked Songs cannot be saved.
