@@ -62,8 +62,12 @@ SOFTWARE.
 
 第三方接口与音源随时可能变更、限流或停止服务，本项目不保证任何音源长期可用，也不对第三方服务的内容与合法性负责。
 
+插件图标 `icon.png` 为用户提供的图片素材（由 96×96 原图放大到 256×256），不在本项目的 MIT 许可范围内；再分发前请自行确认素材权利。
+
 ## Trademarks and content (English)
 
 This is an independent community plugin. NetEase Cloud Music (网易云音乐), QQ Music, Kuwo Music, GDStudio, YesPlayMusic and their logos are trademarks or assets of their respective owners. The plugin is not affiliated with, endorsed by, or sponsored by any of them.
 
 The plugin bundles no audio files, credentials, cookies or tokens, and it neither caches nor redistributes audio. Playback requests go from the YesPlayMusic player directly to the CDN URLs returned by the third-party sources; the plugin only performs an availability probe on candidate URLs. Audio and catalog metadata remain the property of their respective rights holders.
+
+The plugin icon `icon.png` is a user-supplied image (upscaled from 96×96 to 256×256) and is not covered by this project's MIT license; verify its rights before redistributing.
