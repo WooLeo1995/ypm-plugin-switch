@@ -23,6 +23,7 @@ export {
   isLiked,
   like,
   savePlaylist,
+  trackPlaylists,
 } from "./catalog/playlists.js";
 export { stream } from "./stream.js";
 

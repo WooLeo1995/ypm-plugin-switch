@@ -297,6 +297,17 @@ export function playlists() {
   return [summary(liked), ...regular.map(summary), ...saved];
 }
 
+// 宿主用它从「添加到歌单」里排除已经包含这首歌的歌单（可选 ABI，宿主不支持时忽略）。
+export function trackPlaylists({ trackId } = {}) {
+  const id = String(trackId ?? "");
+  if (!/^\d+$/.test(id)) return [];
+  const state = load();
+  ensureLiked(state);
+  return state.items
+    .filter((item) => item.tracks.some((track) => track.id === id))
+    .map((item) => item.id);
+}
+
 export function localPlaylist({ id } = {}) {
   const state = load();
   ensureLiked(state);

@@ -117,3 +117,25 @@ test("playlist() 返回宿主菜单需要的 saved 收藏状态", async () => {
   r.plugin.deletePlaylist({ id: "3778678" });
   assert.equal(plain(await r.plugin.playlist({ id: 3778678 })).saved, false);
 });
+
+test("trackPlaylists：返回已经包含该曲目的歌单，供宿主过滤添加菜单", async () => {
+  const r = await runtime();
+  r.route("/eapi/v3/song/detail", (request) => {
+    const ids = JSON.parse(request.payload.c).map((item) => String(item.id));
+    return json({ code: 200, songs: ids.map((id) => song(id)) });
+  });
+  const first = plain(r.plugin.createPlaylist({ name: "歌单一" }));
+  const second = plain(r.plugin.createPlaylist({ name: "歌单二" }));
+  await r.plugin.addToPlaylist({ id: first.id, trackIds: ["42"] });
+  await r.plugin.addToPlaylist({ id: second.id, trackIds: ["43"] });
+
+  assert.deepEqual(plain(r.plugin.trackPlaylists({ trackId: "42" })), [first.id]);
+  assert.deepEqual(plain(r.plugin.trackPlaylists({ trackId: "43" })), [second.id]);
+  assert.deepEqual(plain(r.plugin.trackPlaylists({ trackId: "99" })), []);
+  assert.deepEqual(plain(r.plugin.trackPlaylists({})), []);
+  assert.deepEqual(plain(r.plugin.trackPlaylists({ trackId: "abc" })), []);
+
+  // 喜欢歌单也算：宿主会再把 fixed 歌单过滤掉，但数据本身要正确。
+  await r.plugin.like({ id: "42", on: true });
+  assert.deepEqual(plain(r.plugin.trackPlaylists({ trackId: "42" })).sort(), [first.id, "local-liked"].sort());
+});
