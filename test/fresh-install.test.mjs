@@ -95,3 +95,25 @@ test("显式本地歌单参数不会回退到最近打开的歌单上下文", as
   assert.ok(!titles("local-1").some((title) => title.includes("收藏歌单")));
   assert.ok(!titles("unknown").some((title) => title.includes("收藏歌单")));
 });
+
+test("playlist() 返回宿主菜单需要的 saved 收藏状态", async () => {
+  const r = await runtime();
+  r.route("/eapi/v6/playlist/detail", () => json({
+    code: 200,
+    playlist: {
+      id: 3778678,
+      name: "热歌榜",
+      coverImgUrl: "http://p3.music.126.net/hot.jpg",
+      trackCount: 0,
+      creator: { nickname: "网易云音乐" },
+      trackIds: [],
+      tracks: [],
+    },
+  }));
+
+  assert.equal(plain(await r.plugin.playlist({ id: 3778678 })).saved, false);
+  await r.plugin.savePlaylist({ id: "3778678", on: true });
+  assert.equal(plain(await r.plugin.playlist({ id: 3778678 })).saved, true);
+  r.plugin.deletePlaylist({ id: "3778678" });
+  assert.equal(plain(await r.plugin.playlist({ id: 3778678 })).saved, false);
+});

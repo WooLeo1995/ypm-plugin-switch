@@ -35,7 +35,8 @@ export async function playlist({ id } = {}) {
   const detail = await library.playlist({ id });
   // 记录上下文，供「收藏歌单」右键菜单判断（宿主对其他人的歌单不传 playlist id）。
   localPlaylists.rememberPlaylistContext(detail);
-  return detail;
+  // 宿主歌单「更多」菜单用 saved 决定显示「收藏歌单」还是「取消收藏歌单」。
+  return { ...detail, saved: localPlaylists.isSavedPlaylist(detail.id) };
 }
 
 function saveTargetFor(track, playlistId) {

@@ -60,7 +60,7 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 | `home()` | 推荐歌单、推荐新歌、发现入口 |
 | `browse({ page })` | `""`、`charts`、`top:<id>`、`new-albums`、`playlists:<分类>:<偏移>`、`sources` |
 | `album({ id })` / `artist({ id })` | 详情 |
-| `playlist({ id })` | 详情；`local-<n>` 读本地歌单，数字编号读网易云歌单 |
+| `playlist({ id })` | 详情；`local-<n>` 读本地歌单，数字编号读网易云歌单，并按本地收藏状态返回 `saved` |
 | `playlists()` | 本地歌单列表（音乐库「歌单」页使用） |
 | `createPlaylist({ name })` / `renamePlaylist({ id, name })` / `deletePlaylist({ id })` | 创建 / 改名 / 删除本地歌单 |
 | `addToPlaylist({ id, trackIds })` / `removeFromPlaylist({ id, trackIds })` / `movePlaylistTrack({ id, from, to })` | 加歌 / 移歌 / 排序 |
@@ -268,7 +268,7 @@ mobi.kuwo.cn                  酷我移动
 开发时用三层验证，全部在仓库内可复现：
 
 1. **离线测试**：`node --experimental-vm-modules --test test/*.test.mjs`
-   87 条，覆盖清单、曲库映射、本地歌单与「我喜欢的音乐」、收藏歌单（含右键上下文）、匹配规则、
+   88 条，覆盖清单、曲库映射、本地歌单与「我喜欢的音乐」、收藏歌单（含右键上下文与 saved 状态）、匹配规则、
    网关排序 / 熔断 / 缓存 / 探测、菜单、自检与 9 语言本地化，不访问真实网络。
 2. **实网冒烟**：`node scripts/live-check.mjs`
    31 项，真实请求曲库与音源，校验搜索、三档音质、缓存命中、无源歌曲、自检页、设置
