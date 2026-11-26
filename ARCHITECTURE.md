@@ -159,6 +159,23 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 - QQ 的 smartbox / musicu / 歌词都匿名可用；任何一步失败都回退成网易云专辑，不影响
   原有歌手页。
 
+## 跨源歌手 / 专辑链接
+
+酷我 / QQ 曲目没有网易云的歌手 id 和专辑 id，但宿主只认 `Track.artists[].id` 与
+`track.album.id`。所以：
+
+- 一首曲目的每个歌手带 `artist:<歌手名>`，专辑带 `kw-album:<albumid>`（酷我）或
+  `qq-album:<albumMid>`（QQ）。宿主把它们编码进路由，点歌手 / 专辑、以及正在播放页和
+  歌词页里的链接都会走插件的 `artist()` / `album()`。
+- `artist(id)` 遇到 `artist:` 前缀：先按名字搜网易云歌手（`/api/cloudsearch/pc` type 100，
+  取同名或歌手重叠的结果），找到就返回网易云歌手页（含 QQ 专辑补全）；找不到再调 QQ
+  的歌手详情 / 热门歌曲 / 专辑列表，返回一个 QQ 歌手页；都失败才提示「歌手暂不可用」。
+- `album(id)` 遇到 `kw-album:` 时请求酷我 `stype=albuminfo&albumid=...`；这个接口返回的是
+  Python 风格单引号对象，`kuwo.js` 里有一个小的宽松解析器。专辑元数据取 `name / pub /
+  songnum / hts_img`，曲目取 `musiclist[]`，全部映射成 `kw:<rid>` 并写入缓存。
+- 曲目快照（`kwTracks` / `qqTracks`）会保留这些 id，所以喜欢 / 本地歌单里的曲目重启后
+  仍然可以点歌手和专辑。
+
 ## 音源接口
 
 每个音源模块默认导出一个对象：

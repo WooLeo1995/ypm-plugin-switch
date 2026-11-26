@@ -2,6 +2,7 @@
 // 这里只补「曲库元数据」；播放仍走网关，把曲目交给酷我 / GDStudio 的关键词链路。
 import { normalizeName, artistsOverlap } from "../gateway/match.js";
 import * as model from "./models.js";
+import { artistLink } from "./links.js";
 import { t } from "../i18n.js";
 
 const MUSICU = "https://u.y.qq.com/cgi-bin/musicu.fcg";
@@ -68,7 +69,7 @@ function mapAlbum(raw) {
     id: qqAlbumId(mid),
     name: name || t("未知专辑"),
     imageUrl: coverOf(mid),
-    artists: [{ id: "", name: singer || t("未知歌手") }],
+    artists: [{ id: artistLink(singer), name: singer || t("未知歌手") }],
     trackCount: total,
     released: text(raw?.publishDate),
     kind: kindOf(raw, total),
@@ -83,7 +84,7 @@ function mapTrack(song, album) {
     id: qqTrackId(mid),
     name: decode(song?.name || song?.title) || t("未知歌曲"),
     artists: (singers.length ? singers : [{ name: t("未知歌手") }])
-      .map((singer) => ({ id: "", name: decode(singer?.name) || t("未知歌手") })),
+      .map((singer) => ({ id: artistLink(decode(singer?.name)), name: decode(singer?.name) || t("未知歌手") })),
     album: album
       ? { id: album.id, name: album.name, imageUrl: album.imageUrl }
       : { id: "", name: decode(song?.album?.name) || t("未知专辑") },
@@ -264,6 +265,48 @@ export async function qqLyrics(value) {
   }
 }
 
+export async function qqArtist(name) {
+  const mid = await singerMid(name);
+  if (!mid) return null;
+  const data = await musicu({
+    info: {
+      module: "music.musichallSinger.SingerInfoInter",
+      method: "GetSingerDetail",
+      param: { singer_mids: [mid], pic: 1, group_singer: 1, wiki_singer: 1, ex_singer: 1 },
+    },
+    songs: {
+      module: "musichall.song_list_server",
+      method: "GetSingerSongList",
+      param: { singerMid: mid, begin: 0, num: 50, order: 1 },
+    },
+  });
+  const singer = data?.info?.data?.singer_list?.[0] || {};
+  const basic = singer.basic_info || {};
+  const rows = (data?.songs?.data?.songList || []).map((row) => row?.songInfo).filter(Boolean);
+  const singerName = decode(basic.name) || name;
+  const pmid = text(basic.singer_pmid) || mid;
+  const artist = {
+    id: `qq-artist:${mid}`,
+    name: singerName,
+    imageUrl: `https://y.gtimg.cn/music/photo_new/T001R300x300M000${pmid}.jpg`,
+  };
+  const tracks = rows.map((song) => {
+    const album = song?.album?.mid
+      ? mapAlbum({
+        albumMid: song.album.mid,
+        albumName: song.album.name,
+        singerName,
+        publishDate: song.album.time_public,
+        totalNum: 0,
+      })
+      : null;
+    return mapTrack(song, album);
+  }).filter(Boolean);
+  rememberTracks(tracks);
+  const albums = await qqAlbumsForArtist(singerName).catch(() => []);
+  return { artist, tracks, albums, related: [] };
+}
+
 // 宿主之后只传 id；喜欢 / 本地歌单 / 歌词需要靠这份快照补齐元数据。
 const recent = new Map();
 let loaded = false;
@@ -273,7 +316,7 @@ function snapshot(track) {
   return {
     id: String(track.id),
     name: String(track.name || ""),
-    artists: (track.artists || []).map((artist) => ({ id: "", name: String(artist?.name || "") })),
+    artists: (track.artists || []).map((artist) => ({ id: String(artist?.id || ""), name: String(artist?.name || "") })),
     album: {
       id: String(track.album?.id || ""),
       name: String(track.album?.name || ""),
@@ -293,7 +336,7 @@ function normalizeStored(item) {
     id,
     name: String(item.name || t("未知歌曲")),
     artists: Array.isArray(item.artists) && item.artists.length
-      ? item.artists.map((artist) => ({ id: "", name: String(artist?.name || t("未知歌手")) }))
+      ? item.artists.map((artist) => ({ id: String(artist?.id || artistLink(artist?.name)), name: String(artist?.name || t("未知歌手")) }))
       : [{ id: "", name: t("未知歌手") }],
     album: {
       id: String(item.album?.id || ""),

@@ -1,6 +1,8 @@
 // 酷我搜索兜底：网易云曲库搜不到时，用酷我曲库补结果。
 // 结果 id 形如 kw:<rid>，播放时网关直接按 rid 取址，不再依赖歌名关键词匹配。
 import { searchKuwoKt } from "../gateway/sources/kuwo-search.js";
+import { getText } from "../gateway/sources/http.js";
+import { artistLink } from "./links.js";
 import { normalizeName, versionKey } from "../gateway/match.js";
 import * as model from "./models.js";
 import { t } from "../i18n.js";
@@ -11,6 +13,7 @@ const LIMIT = 200;
 const COVER = "https://img1.kuwo.cn/star/albumcover/300/";
 const SONG_PAGE = "https://www.kuwo.cn/play_detail/";
 const PREFIX = "kw:";
+const ALBUM_PREFIX = "kw-album:";
 
 export function isKuwoTrackId(value) {
   return /^kw:\d+$/.test(String(value ?? ""));
@@ -18,6 +21,10 @@ export function isKuwoTrackId(value) {
 
 export function kuwoTrackId(rid) {
   return `${PREFIX}${rid}`;
+}
+
+export function isKuwoAlbumId(value) {
+  return /^kw-album:\d+$/.test(String(value ?? ""));
 }
 
 const text = (value) => String(value == null ? "" : value).trim();
@@ -43,7 +50,7 @@ function artistsOf(raw) {
     .split(/&|、|，|;|；/)
     .map((name) => name.trim())
     .filter(Boolean);
-  return (names.length ? names : [t("未知歌手")]).map((name) => ({ id: "", name }));
+  return (names.length ? names : [t("未知歌手")]).map((name) => ({ id: artistLink(name), name }));
 }
 
 function coverOf(short) {
@@ -68,14 +75,17 @@ function mapRow(row) {
   const rid = ridOf(row);
   if (!rid) return null;
   const cover = coverOf(row.web_albumpic_short);
+  const artists = artistsOf(row.ARTIST || row.FARTIST);
+  const albumId = String(row.ALBUMID || "");
   const track = {
     id: kuwoTrackId(rid),
     name: cleanTitle(row.SONGNAME || row.NAME) || t("未知歌曲"),
-    artists: artistsOf(row.ARTIST || row.FARTIST),
+    artists,
     album: {
-      id: "",
+      id: /^\d+$/.test(albumId) && albumId !== "0" ? `${ALBUM_PREFIX}${albumId}` : "",
       name: decode(row.ALBUM) || t("未知专辑"),
       ...(cover ? { imageUrl: cover } : {}),
+      artists,
     },
     duration: durationOf(row.DURATION),
     url: `${SONG_PAGE}${rid}`,
@@ -212,9 +222,9 @@ function snapshot(track) {
   return {
     id: String(track.id),
     name: String(track.name || ""),
-    artists: (track.artists || []).map((artist) => ({ id: "", name: String(artist?.name || "") })),
+    artists: (track.artists || []).map((artist) => ({ id: String(artist?.id || ""), name: String(artist?.name || "") })),
     album: {
-      id: "",
+      id: String(track.album?.id || ""),
       name: String(track.album?.name || ""),
       ...(cover ? { imageUrl: cover } : {}),
     },
@@ -237,10 +247,10 @@ function normalizeStored(item) {
     id,
     name: String(item.name || t("未知歌曲")),
     artists: Array.isArray(item.artists) && item.artists.length
-      ? item.artists.map((artist) => ({ id: "", name: String(artist?.name || t("未知歌手")) }))
+      ? item.artists.map((artist) => ({ id: String(artist?.id || artistLink(artist?.name)), name: String(artist?.name || t("未知歌手")) }))
       : [{ id: "", name: t("未知歌手") }],
     album: {
-      id: "",
+      id: String(item.album?.id || ""),
       name: String(item.album?.name || t("未知专辑")),
       ...(cover ? { imageUrl: cover } : {}),
     },
@@ -281,6 +291,135 @@ export function kuwoTrackById(value) {
   ensureLoaded();
   const id = String(value ?? "");
   return recent.get(id) || model.cachedMeta(id) || null;
+}
+
+// 酷我的专辑详情接口返回的是 Python 风格单引号对象，不是严格 JSON；
+// 写一个小解析器，避免把正文里的引号替换坏。
+function parseKuwoLoose(text) {
+  const s = String(text);
+  let i = 0;
+  const skip = () => { while (i < s.length && /\s/.test(s[i])) i += 1; };
+  const parseString = (quote) => {
+    i += 1;
+    let out = "";
+    while (i < s.length) {
+      const ch = s[i];
+      if (ch === "\\" && i + 1 < s.length) {
+        const next = s[i + 1];
+        const map = { n: "\n", r: "\r", t: "\t", "\\": "\\", "'": "'", '"': '"' };
+        out += Object.prototype.hasOwnProperty.call(map, next) ? map[next] : next;
+        i += 2;
+        continue;
+      }
+      if (ch === quote) { i += 1; return out; }
+      out += ch;
+      i += 1;
+    }
+    throw new Error("unterminated string");
+  };
+  const parseValue = () => {
+    skip();
+    const ch = s[i];
+    if (ch === "'" || ch === '"') return parseString(ch);
+    if (ch === "{") return parseObject();
+    if (ch === "[") return parseArray();
+    const start = i;
+    while (i < s.length && !/[,}\]]/.test(s[i])) i += 1;
+    return s.slice(start, i).trim();
+  };
+  const parseArray = () => {
+    i += 1;
+    const out = [];
+    skip();
+    if (s[i] === "]") { i += 1; return out; }
+    while (i < s.length) {
+      out.push(parseValue());
+      skip();
+      if (s[i] === ",") { i += 1; continue; }
+      if (s[i] === "]") { i += 1; return out; }
+      throw new Error("bad array");
+    }
+    return out;
+  };
+  const parseObject = () => {
+    i += 1;
+    const out = {};
+    skip();
+    if (s[i] === "}") { i += 1; return out; }
+    while (i < s.length) {
+      skip();
+      if (s[i] !== "'" && s[i] !== '"') throw new Error("bad key");
+      const key = parseString(s[i]);
+      skip();
+      if (s[i] !== ":") throw new Error("bad colon");
+      i += 1;
+      out[key] = parseValue();
+      skip();
+      if (s[i] === ",") { i += 1; continue; }
+      if (s[i] === "}") { i += 1; return out; }
+      throw new Error("bad object");
+    }
+    return out;
+  };
+  return parseValue();
+}
+
+function albumCover(value) {
+  const raw = text(value);
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) return coverOf(raw);
+  return raw.replace(/^http:\/\//i, "https://");
+}
+
+function albumKind(total) {
+  if (total <= 1) return "single";
+  if (total <= 5) return "ep";
+  return "album";
+}
+
+function mapAlbumTrack(row, album) {
+  const rid = text(row?.musicrid || row?.id);
+  if (!/^\d+$/.test(rid)) return null;
+  const artists = artistsOf(row?.artist);
+  return {
+    id: kuwoTrackId(rid),
+    name: cleanTitle(row?.songname || row?.name) || t("未知歌曲"),
+    artists,
+    album: {
+      id: album.id,
+      name: album.name,
+      ...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
+      artists: album.artists,
+    },
+    duration: durationOf(row?.duration),
+    url: `${SONG_PAGE}${rid}`,
+  };
+}
+
+export async function kuwoAlbumDetail(value) {
+  const albumId = String(value ?? "").slice(ALBUM_PREFIX.length);
+  if (!/^\d+$/.test(albumId)) throw new Error(t("专辑暂不可用"));
+  const url = `https://search.kuwo.cn/r.s?stype=albuminfo&albumid=${albumId}&encoding=utf8&rformat=json`;
+  const body = await getText(url, { timeout: 8000 });
+  if (!body) throw new Error(t("专辑暂不可用"));
+  const data = parseKuwoLoose(body);
+  const rows = Array.isArray(data?.musiclist) ? data.musiclist : [];
+  if (!rows.length) throw new Error(t("专辑暂不可用"));
+  const artistName = decode(data.artist) || decode(rows[0]?.artist);
+  const cover = albumCover(data.hts_img || data.img || data.pic || rows[0]?.web_albumpic_short);
+  const total = Number(data.songnum) || rows.length;
+  const album = {
+    id: `${ALBUM_PREFIX}${albumId}`,
+    name: decode(data.name) || t("未知专辑"),
+    imageUrl: cover,
+    artists: artistName ? [{ id: artistLink(artistName), name: artistName }] : [],
+    trackCount: total,
+    released: text(data.pub),
+    kind: albumKind(total),
+  };
+  const tracks = rows.map((row) => mapAlbumTrack(row, album)).filter(Boolean);
+  remember(tracks);
+  return { album, tracks };
 }
 
 export async function searchKuwoTracks({ query, offset = 0 } = {}) {

@@ -84,11 +84,12 @@ test("search：网易云 0 结果时用酷我兜底，映射 kw:<rid>（含封�
   assert.deepEqual(plain(result.tracks), [{
     id: "kw:777",
     name: "冷门情歌",
-    artists: [{ id: "", name: "某歌手" }, { id: "", name: "另一位" }],
+    artists: [{ id: "artist:某歌手", name: "某歌手" }, { id: "artist:另一位", name: "另一位" }],
     album: {
-      id: "",
+      id: "kw-album:9527",
       name: "测试专辑",
       imageUrl: "https://img1.kuwo.cn/star/albumcover/300/s3s1/1/cover.jpg",
+      artists: [{ id: "artist:某歌手", name: "某歌手" }, { id: "artist:另一位", name: "另一位" }],
     },
     duration: 201000,
     url: "https://www.kuwo.cn/play_detail/777",
@@ -159,7 +160,7 @@ test("search：网易云只有同名翻唱、没有查询里的歌手时兜底�
   assert.equal(result.tracks.length, 1);
   assert.equal(result.tracks[0].id, "kw:888");
   assert.equal(result.tracks[0].name, "说谎");
-  assert.deepEqual(plain(result.tracks[0].artists), [{ id: "", name: "林宥嘉" }]);
+  assert.deepEqual(plain(result.tracks[0].artists), [{ id: "artist:林宥嘉", name: "林宥嘉" }]);
 });
 
 test("search：单曲名第一页只有翻唱时，兜底酷我原唱", async () => {
@@ -187,7 +188,7 @@ test("search：单曲名第一页只有翻唱时，兜底酷我原唱", async ()
   assert.equal(kuwoRequests, 1);
   assert.equal(result.tracks[0].id, "kw:52844341");
   assert.equal(result.tracks[0].name, "脆弱一分钟");
-  assert.deepEqual(plain(result.tracks[0].artists), [{ id: "", name: "林宥嘉" }]);
+  assert.deepEqual(plain(result.tracks[0].artists), [{ id: "artist:林宥嘉", name: "林宥嘉" }]);
 });
 
 test("search：翻唱页里已经能找到原唱时，不替换网易云结果", async () => {
@@ -463,6 +464,38 @@ test("search：空关键词不发请求", async () => {
   const before = r.requests.length;
   assert.deepEqual(plain(await r.plugin.search({ query: "   ", kind: "tracks" })), { tracks: [], more: false });
   assert.equal(r.requests.length, before);
+});
+
+test("album：kw-album:<id> 读取酷我专辑详情并映射曲目", async () => {
+  const r = await runtime();
+  r.route("search.kuwo.cn", () => text("{'name':'脆弱一分钟','artist':'林宥嘉','songnum':'1','pub':'2018-07-24',"
+    + "'hts_img':'https://img2.kuwo.cn/star/albumcover/240/s4s99/66/245690732.jpg',"
+    + "'musiclist':[{'musicrid':'52844341','songname':'脆弱一分钟','artist':'林宥嘉','duration':'192',"
+    + "'web_albumpic_short':'120/s4s99/66/245690732.jpg'}]}"));
+
+  const detail = await r.plugin.album({ id: "kw-album:7876715" });
+  assert.deepEqual(plain(detail.album), {
+    id: "kw-album:7876715",
+    name: "脆弱一分钟",
+    imageUrl: "https://img2.kuwo.cn/star/albumcover/240/s4s99/66/245690732.jpg",
+    artists: [{ id: "artist:林宥嘉", name: "林宥嘉" }],
+    trackCount: 1,
+    released: "2018-07-24",
+    kind: "single",
+  });
+  assert.equal(detail.tracks.length, 1);
+  assert.equal(detail.tracks[0].id, "kw:52844341");
+  assert.equal(detail.tracks[0].name, "脆弱一分钟");
+  assert.deepEqual(plain(detail.tracks[0].artists), [{ id: "artist:林宥嘉", name: "林宥嘉" }]);
+  assert.equal(detail.tracks[0].album.id, "kw-album:7876715");
+});
+
+test("album：酷我专辑详情不可用时返回明确错误", async () => {
+  const r = await runtime();
+  r.route("search.kuwo.cn", () => text("{}"));
+  const error = await r.plugin.album({ id: "kw-album:7876715" }).catch((value) => value);
+  assert.equal(error.code, "unavailable");
+  assert.equal(error.message, r.host.t("专辑暂不可用"));
 });
 
 test("stream：kw:<rid> 绕过网易云详情和酷我关键词搜索，直接按 rid 取址", async () => {

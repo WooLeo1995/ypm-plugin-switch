@@ -12,6 +12,7 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 - **Multi-source gateway**: GDStudio and Kuwo sources are tried in order; a failure switches to the next one automatically.
 - **Kuwo search fallback**: when NetEase has no match, or only covers / instrumentals / DJ edits of the query, the plugin searches Kuwo instead. Those results play directly from Kuwo, with paging, likes and local playlists supported.
 - **Artist album fill-in**: artist pages add albums that NetEase is missing from QQ Music's anonymous album list (for example *脆弱一分钟*). Opening one reads its tracks from QQ; playback still goes through the gateway (Kuwo / GDStudio). Only catalog metadata is added, with no QQ sign-in.
+- **Cross-source links**: artist and album names on Kuwo / QQ tracks, and the links in Now Playing and the lyrics view, are clickable. Artists resolve to the NetEase artist page (falling back to QQ), while albums open the Kuwo or QQ album detail.
 - **Pre-playback availability check**: candidate direct links are probed before they reach the player, so expired or broken URLs are not handed over.
 - **Circuit breaker and caching**: repeated failures cool down and recover on success; a track that just failed is not retried immediately.
 - **"Source gateway" sidebar page**: shows per-source sample self-test results and the current fallback order.

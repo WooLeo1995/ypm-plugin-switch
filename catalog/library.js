@@ -1,9 +1,10 @@
 // 匿名曲库：搜索、发现、详情、歌词。所有请求都走 eapi，无需登录。
 import { api, fail, id } from "./client.js";
 import * as model from "./models.js";
-import { containsOriginalArtist, coverOnlyHint, forgetFallbackQuery, hasRelevantTrack, isFallbackQuery, isKuwoTrackId, rememberFallbackQuery, searchKuwoTracks } from "./kuwo.js";
-import { isQqAlbumId, isQqTrackId, qqAlbumDetail, qqAlbumsForArtist, qqLyrics } from "./qq.js";
-import { normalizeName } from "../gateway/match.js";
+import { containsOriginalArtist, coverOnlyHint, forgetFallbackQuery, hasRelevantTrack, isFallbackQuery, isKuwoAlbumId, isKuwoTrackId, kuwoAlbumDetail, rememberFallbackQuery, searchKuwoTracks } from "./kuwo.js";
+import { isQqAlbumId, isQqTrackId, qqAlbumDetail, qqAlbumsForArtist, qqArtist, qqLyrics } from "./qq.js";
+import { artistNameOf, isArtistLink } from "./links.js";
+import { artistsOverlap, normalizeName } from "../gateway/match.js";
 import { t } from "../i18n.js";
 
 const PAGE = 50;
@@ -166,6 +167,14 @@ export async function album({ id: value }) {
       fail("unavailable", "专辑暂不可用");
     }
   }
+  if (isKuwoAlbumId(value)) {
+    try {
+      return await kuwoAlbumDetail(value);
+    } catch (error) {
+      console.warn("[switch] kuwo album failed:", error?.message || error);
+      fail("unavailable", "专辑暂不可用");
+    }
+  }
   const data = await api(`/api/v1/album/${id(value)}`);
   const mapped = model.album(data.album);
   return {
@@ -196,8 +205,7 @@ function mergeAlbums(base, extra) {
   return merged;
 }
 
-export async function artist({ id: value }) {
-  const artistId = id(value);
+async function neteaseArtist(artistId) {
   const [detail, albums] = await Promise.all([
     api(`/api/v1/artist/${artistId}`),
     api(`/api/artist/albums/${artistId}`, { limit: 100, offset: 0, total: true }).catch(() => null),
@@ -222,6 +230,51 @@ export async function artist({ id: value }) {
     albums: merged,
     related: [],
   };
+}
+
+const resolvedArtists = new Map();
+
+// 酷我 / QQ 曲目里的歌手只有名字，点击时现查网易云；查不到再退回 QQ 歌手页。
+async function neteaseArtistId(name) {
+  const key = normalizeName(name).toLowerCase();
+  if (!key) return "";
+  if (resolvedArtists.has(key)) return resolvedArtists.get(key);
+  let found = "";
+  try {
+    const result = await api("/api/cloudsearch/pc", {
+      s: name,
+      type: 100,
+      limit: 10,
+      offset: 0,
+      total: true,
+    });
+    const list = result.result?.artists || [];
+    const exact = list.find((item) => normalizeName(item.name).toLowerCase() === key);
+    const overlap = list.find((item) => artistsOverlap(name, item.name));
+    found = String((exact || overlap)?.id || "");
+  } catch (error) {
+    console.warn("[switch] artist lookup failed:", error?.message || error);
+  }
+  resolvedArtists.set(key, found);
+  return found;
+}
+
+export async function artist({ id: value }) {
+  const raw = String(value ?? "");
+  if (isArtistLink(raw)) {
+    const name = artistNameOf(raw);
+    if (!name) fail("unavailable", "歌手暂不可用");
+    const neteaseId = await neteaseArtistId(name);
+    if (neteaseId) return neteaseArtist(neteaseId);
+    try {
+      const fallback = await qqArtist(name);
+      if (fallback) return fallback;
+    } catch (error) {
+      console.warn("[switch] qq artist failed:", error?.message || error);
+    }
+    fail("unavailable", "歌手暂不可用");
+  }
+  return neteaseArtist(id(raw));
 }
 
 export async function lyrics({ id: value }) {

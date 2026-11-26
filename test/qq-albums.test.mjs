@@ -60,7 +60,20 @@ function stubQQ(r, { albumList = [QQ_ALBUM, QQ_DUPLICATE] } = {}) {
     if (body.req?.module === "music.musichallAlbum.AlbumListServer") {
       return json({ req: { code: 0, data: { albumList, total: albumList.length } } });
     }
-    if (body.info || body.songs) {
+    if (body.info?.module === "music.musichallSinger.SingerInfoInter") {
+      return json({
+        info: {
+          code: 0,
+          data: {
+            singer_list: [{
+              basic_info: { name: "林宥嘉", singer_mid: "001f0VyZ1hmWZ1", singer_pmid: "001f0VyZ1hmWZ1_12" },
+            }],
+          },
+        },
+        songs: { code: 0, data: { songList: [{ songInfo: QQ_SONG }], totalNum: 1 } },
+      });
+    }
+    if (body.info?.module === "music.musichallAlbum.AlbumInfoServer") {
       return json({
         info: {
           code: 0,
@@ -122,11 +135,39 @@ test("artist：把 QQ 专辑补进歌手页，同名网易云专辑不重复", a
     id: "qq-album:000z1DIM3sRMSp",
     name: "脆弱一分钟",
     imageUrl: "https://y.gtimg.cn/music/photo_new/T002R300x300M000000z1DIM3sRMSp.jpg",
-    artists: [{ id: "", name: "林宥嘉" }],
+    artists: [{ id: "artist:林宥嘉", name: "林宥嘉" }],
     trackCount: 1,
     released: "2018-07-24",
     kind: "single",
   });
+});
+
+test("artist：artist:<名字> 先查网易云歌手，再补 QQ 专辑", async () => {
+  const r = await runtime();
+  r.route("/eapi/cloudsearch/pc", () => json({
+    code: 200,
+    result: { artists: [{ id: 3685, name: "林宥嘉", picUrl: "http://p1.music.126.net/artist.jpg" }], artistCount: 1 },
+  }));
+  stubNeteaseArtist(r);
+  stubQQ(r);
+
+  const detail = await r.plugin.artist({ id: "artist:林宥嘉" });
+  assert.equal(detail.artist.id, "3685");
+  assert.equal(detail.artist.name, "林宥嘉");
+  assert.ok(plain(detail.albums).some((album) => album.id.startsWith("qq-album:")));
+});
+
+test("artist：网易云查不到的歌手退回 QQ 歌手页", async () => {
+  const r = await runtime();
+  r.route("/eapi/cloudsearch/pc", () => json({ code: 200, result: { artists: [], artistCount: 0 } }));
+  stubQQ(r);
+
+  const detail = await r.plugin.artist({ id: "artist:林宥嘉" });
+  assert.equal(detail.artist.name, "林宥嘉");
+  assert.equal(detail.artist.id, "qq-artist:001f0VyZ1hmWZ1");
+  assert.equal(plain(detail.tracks[0].id), "qq:001tIvDL3161CU");
+  assert.ok(plain(detail.tracks[0].artists[0].id).startsWith("artist:"));
+  assert.ok(plain(detail.albums).some((album) => album.id.startsWith("qq-album:")));
 });
 
 test("artist：QQ 接口失败时仍返回网易云专辑", async () => {
@@ -154,7 +195,7 @@ test("album：QQ 专辑详情映射为 qq:<mid> 曲目并写入缓存", async ()
   assert.deepEqual(tracks[0], {
     id: "qq:001tIvDL3161CU",
     name: "脆弱一分钟",
-    artists: [{ id: "", name: "林宥嘉" }],
+    artists: [{ id: "artist:林宥嘉", name: "林宥嘉" }],
     album: {
       id: "qq-album:000z1DIM3sRMSp",
       name: "脆弱一分钟",

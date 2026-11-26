@@ -104,5 +104,6 @@
   "高音质 (320k)": "Alta calidad (320k)",
   "默认会先探测直链是否真的可播；打开后直接采信音源返回值，可能遇到失效链接": "De forma predeterminada se comprueba que el enlace directo se pueda reproducir; si se activa, se acepta el resultado de la fuente y puede ser un enlace caducado",
   "默认喜欢歌单不能改名或删除": "La playlist predeterminada «Canciones que te gustan» no se puede renombrar ni eliminar",
-  "专辑暂不可用": "Álbum no disponible"
+  "专辑暂不可用": "Álbum no disponible",
+  "歌手暂不可用": "Artista no disponible"
 }
