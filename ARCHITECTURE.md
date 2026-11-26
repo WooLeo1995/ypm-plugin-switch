@@ -155,6 +155,9 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 - `stream(id)` 遇到 `qq:` 时先取缓存的元数据（没有就调 `get_song_detail_yqq`），再把
   歌名 / 歌手 / 时长交给现有网关；按 ID 的链路会跳过，酷我 / GDStudio 的关键词链路
   负责找到可播直链。QQ 官方 vkey 仍然需要登录，这里不使用。
+- QQ 演唱会 / Live 专辑里的曲目经常只有歌名；映射时会按专辑名补上 `(Live)`，否则
+  酷我同名但带 `(Live)` 的同一场录音会被版本限定语规则拒绝。补不到或不存在的场次
+  仍会返回「没有可用音源」。
 - `lyrics(id)` 遇到 `qq:` 时调匿名歌词接口 `fcg_query_lyric_new.fcg`。
 - QQ 的 smartbox / musicu / 歌词都匿名可用；任何一步失败都回退成网易云专辑，不影响
   原有歌手页。

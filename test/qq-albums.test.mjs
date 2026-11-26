@@ -209,6 +209,58 @@ test("album：QQ 专辑详情映射为 qq:<mid> 曲目并写入缓存", async ()
   assert.deepEqual(stored.items.map((item) => item.id), ["qq:001tIvDL3161CU"]);
 });
 
+test("album：QQ 演唱会专辑补 (Live)，并能在酷我匹配到同一场录音", async () => {
+  const r = await runtime();
+  const liveSong = {
+    mid: "001qMznX27lfgD",
+    name: "我是一只鱼",
+    interval: 247,
+    singer: [{ name: "林宥嘉" }],
+    album: { mid: "001MoXPj0yjDjp", name: "XIANG YU YI YANG 线上演唱会 (live)", time_public: "2024-11-30" },
+  };
+  r.route("u.y.qq.com/cgi-bin/musicu.fcg", (request) => {
+    const body = JSON.parse(String(request.body || "{}"));
+    if (body.info?.module === "music.musichallAlbum.AlbumInfoServer") {
+      return json({
+        info: {
+          code: 0,
+          data: { basicInfo: { albumName: "XIANG YU YI YANG 线上演唱会 (live)", publishDate: "2024-11-30" } },
+        },
+        songs: { code: 0, data: { songList: [{ songInfo: liveSong }], totalNum: 1 } },
+      });
+    }
+    throw new Error(`unexpected musicu request: ${String(request.body).slice(0, 120)}`);
+  });
+
+  const detail = await r.plugin.album({ id: "qq-album:001MoXPj0yjDjp" });
+  assert.equal(detail.tracks[0].name, "我是一只鱼 (Live)");
+
+  r.route("music-api.gdstudio.xyz", (request) => {
+    const params = new URL(request.url).searchParams;
+    return params.get("types") === "search" ? json([]) : json({ url: "" });
+  });
+  r.route("search.kuwo.cn", (request) => {
+    const params = new URL(request.url).searchParams;
+    if (params.get("client") === "kt") {
+      return json({
+        PN: "0", RN: "50", SHOW: "1", TOTAL: "1",
+        abslist: [{ SONGNAME: "我是一只鱼 (Live)", ARTIST: "林宥嘉", DURATION: "247", MUSICRID: "MUSIC_442523384" }],
+      });
+    }
+    return json({ content: [{}, { musicpage: { abslist: [] } }] });
+  });
+  r.route("bd-api.kuwo.cn/api/service/advert/watch", () => json({ code: 200 }));
+  r.route("bd-api.kuwo.cn/api/play/music/v2/audioUrl", () => json({
+    code: 200,
+    data: { audioUrl: BODIAN_URL, audioHttpsUrl: BODIAN_URL, bitrate: 320, size: "1MB" },
+  }));
+
+  const stream = await r.plugin.stream({ id: "qq:001qMznX27lfgD", quality: "high" });
+  assert.equal(stream.url, BODIAN_URL);
+  const audio = r.requests.find((request) => request.url.includes("/api/play/music/v2/audioUrl"));
+  assert.equal(new URL(audio.url).searchParams.get("musicId"), "442523384");
+});
+
 test("album：QQ 专辑不可用时返回明确错误", async () => {
   const r = await runtime();
   r.route("u.y.qq.com/cgi-bin/musicu.fcg", () => json({}));

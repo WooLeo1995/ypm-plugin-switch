@@ -76,13 +76,24 @@ function mapAlbum(raw) {
   };
 }
 
+const LIVE_MARK = /(live|演唱会|现场|线上|音乐会)/i;
+
+// QQ 演唱会专辑里的曲目经常只写歌名；补上 (Live)，否则酷我那边带 (Live) 的
+// 同一场录音会被严格匹配当成不同版本拒绝。
+function displayName(song, album) {
+  const name = decode(song?.name || song?.title) || t("未知歌曲");
+  const context = `${album?.name || ""} ${song?.album?.name || ""}`;
+  if (LIVE_MARK.test(context) && !LIVE_MARK.test(name)) return `${name} (Live)`;
+  return name;
+}
+
 function mapTrack(song, album) {
   const mid = text(song?.mid || song?.songmid);
   if (!mid) return null;
   const singers = Array.isArray(song?.singer) ? song.singer : [];
   const mapped = {
     id: qqTrackId(mid),
-    name: decode(song?.name || song?.title) || t("未知歌曲"),
+    name: displayName(song, album),
     artists: (singers.length ? singers : [{ name: t("未知歌手") }])
       .map((singer) => ({ id: artistLink(decode(singer?.name)), name: decode(singer?.name) || t("未知歌手") })),
     album: album
