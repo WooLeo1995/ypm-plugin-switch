@@ -385,7 +385,7 @@ test("artist：歌手、热门歌曲、专辑；专辑列表失败可容忍", as
     imageUrl: "https://p1.music.126.net/artist.jpg",
   });
   assert.deepEqual(detail.tracks.map((item) => item.id), ["186016"]);
-  assert.deepEqual(detail.albums.map((item) => item.id), ["18905"]);
+  assert.deepEqual(plain(detail.albums.map((item) => item.id)), ["18905"]);
   assert.deepEqual(plain(detail.related), []);
   const albumsRequest = eapiRequest(r, "/artist/albums/6452");
   assert.equal(albumsRequest.payload.limit, 100);

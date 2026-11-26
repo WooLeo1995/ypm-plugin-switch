@@ -2,6 +2,8 @@
 import { api, fail, id } from "./client.js";
 import * as model from "./models.js";
 import { containsOriginalArtist, coverOnlyHint, forgetFallbackQuery, hasRelevantTrack, isFallbackQuery, isKuwoTrackId, rememberFallbackQuery, searchKuwoTracks } from "./kuwo.js";
+import { isQqAlbumId, isQqTrackId, qqAlbumDetail, qqAlbumsForArtist, qqLyrics } from "./qq.js";
+import { normalizeName } from "../gateway/match.js";
 import { t } from "../i18n.js";
 
 const PAGE = 50;
@@ -155,6 +157,15 @@ export async function playlist({ id: value }) {
 }
 
 export async function album({ id: value }) {
+  // 歌手页补进来的 QQ 专辑：走 QQ 的匿名专辑详情，曲目播放仍交给网关。
+  if (isQqAlbumId(value)) {
+    try {
+      return await qqAlbumDetail(value);
+    } catch (error) {
+      console.warn("[switch] qq album failed:", error?.message || error);
+      fail("unavailable", "专辑暂不可用");
+    }
+  }
   const data = await api(`/api/v1/album/${id(value)}`);
   const mapped = model.album(data.album);
   return {
@@ -163,21 +174,59 @@ export async function album({ id: value }) {
   };
 }
 
+const albumKey = (album) => normalizeName(album?.name || "").toLowerCase()
+  .replace(/[\s（）()【】\[\]·・\-—_.,，。!！?？:：;；'"“”‘’]/g, "");
+
+function similarAlbum(existing, candidate) {
+  if (!existing || !candidate) return false;
+  if (existing === candidate) return true;
+  const [longer, shorter] = existing.length >= candidate.length ? [existing, candidate] : [candidate, existing];
+  return longer.length - shorter.length <= 4 && longer.includes(shorter);
+}
+
+function mergeAlbums(base, extra) {
+  const merged = [...base];
+  const keys = base.map(albumKey).filter(Boolean);
+  for (const album of extra) {
+    const key = albumKey(album);
+    if (!key || keys.some((existing) => similarAlbum(existing, key))) continue;
+    keys.push(key);
+    merged.push(album);
+  }
+  return merged;
+}
+
 export async function artist({ id: value }) {
   const artistId = id(value);
   const [detail, albums] = await Promise.all([
     api(`/api/v1/artist/${artistId}`),
     api(`/api/artist/albums/${artistId}`, { limit: 100, offset: 0, total: true }).catch(() => null),
   ]);
+  const artist = model.artist(detail.artist);
+  const baseAlbums = (albums?.hotAlbums || []).map((value) => model.album(value));
+  let merged = baseAlbums;
+  if (artist.name && artist.name !== "未知歌手") {
+    try {
+      const extra = await qqAlbumsForArtist(artist.name);
+      merged = mergeAlbums(baseAlbums, extra);
+      if (merged.length > baseAlbums.length) {
+        console.info(`[switch] artist ${artist.name}: +${merged.length - baseAlbums.length} qq albums`);
+      }
+    } catch (error) {
+      console.warn("[switch] qq artist albums failed:", error?.message || error);
+    }
+  }
   return {
-    artist: model.artist(detail.artist),
+    artist,
     tracks: (detail.hotSongs || []).map((value) => model.track(value)),
-    albums: (albums?.hotAlbums || []).map((value) => model.album(value)),
+    albums: merged,
     related: [],
   };
 }
 
 export async function lyrics({ id: value }) {
+  // QQ 专辑里的曲目走 QQ 的匿名歌词接口。
+  if (isQqTrackId(value)) return qqLyrics(value);
   // 酷我搜索兜底的曲目没有接入歌词接口；返回空歌词，由播放器显示「暂无歌词」。
   if (isKuwoTrackId(value)) return { lrc: "", translation: "" };
   const data = await api("/api/song/lyric", {

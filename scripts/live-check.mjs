@@ -177,6 +177,9 @@ const KNOWN_ENDPOINTS = [
   ["mobi.kuwo.cn", "酷我移动"],
   ["m701.music.126.net", "GDStudio 网易 CDN"],
   ["bd-lv.kuwo.cn", "酷我音频 CDN"],
+  ["u.y.qq.com", "QQ 音乐 musicu"],
+  ["c.y.qq.com", "QQ 音乐 smartbox / 歌词"],
+  ["y.gtimg.cn", "QQ 专辑封面"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -459,6 +462,28 @@ async function main() {
     const artists = new Set(discovered.map(({ track }) => plain(artistTextOf(track))));
     if (artists.size < 3) throw new Error(`只有 ${artists.size} 位不同歌手`);
     return `${discovered.length} 首 / ${artists.size} 位歌手`;
+  });
+
+  // 4b. 歌手页专辑补全 + 补进来的曲目播放
+  await check("歌手页：QQ 匿名专辑补全并播放", async () => {
+    const started = Date.now();
+    const artist = await withTimeout(() => plugin.artist({ id: "3685" }), SEARCH_TIMEOUT_MS, "歌手页");
+    // 选《脆弱一分钟》这张单曲：它不是现场/绝版，酷我稳定有原曲。
+    const extra = (artist?.albums || []).find((album) => (
+      String(album?.id || "").startsWith("qq-album:") && String(album?.name || "").includes("脆弱一分钟")
+    ));
+    if (!extra) throw new Error("没有补到《脆弱一分钟》QQ 专辑");
+    const detail = await withTimeout(() => plugin.album({ id: extra.id }), SEARCH_TIMEOUT_MS, "QQ 专辑");
+    const track = (detail?.tracks || [])[0];
+    if (!track) throw new Error("QQ 专辑没有曲目");
+    const stream = await withTimeout(
+      () => plugin.stream({ id: track.id, quality: "high" }),
+      STREAM_TIMEOUT_MS,
+      "QQ 曲目 stream",
+    );
+    const head = await headStatus(stream.url);
+    if (!head.ok) throw new Error(`QQ 曲目直链不可用：${head.status || head.error}`);
+    return `专辑 ${artist.albums.length} 张，补《${extra.name}》${detail.tracks.length} 首，${track.id} → ${new URL(stream.url).hostname} HEAD=${head.status} ${Date.now() - started}ms`;
   });
 
   // 网易云搜索全挂通常意味着断网；此时提前结束，避免后续逐项等超时。

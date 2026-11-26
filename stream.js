@@ -1,8 +1,10 @@
 // stream() 入口：先用匿名歌曲详情补全曲名/歌手/时长，再交给网关选音源。
 import { api, fail } from "./catalog/client.js";
+import { t } from "./i18n.js";
 import * as model from "./catalog/models.js";
 import { resolveStream } from "./gateway/index.js";
 import { isKuwoTrackId, kuwoTrackById } from "./catalog/kuwo.js";
+import { isQqTrackId, qqTrackById } from "./catalog/qq.js";
 
 async function trackOf(value) {
   const songId = String(value ?? "");
@@ -29,6 +31,12 @@ export async function stream({ id, quality = "high" } = {}) {
       track: known || { id: raw, name: "", artists: [], album: {}, duration: 0 },
       quality,
     });
+  }
+  // QQ 专辑曲目：元数据来自 QQ，播放交给网关的关键词链路（酷我 / GDStudio）。
+  if (isQqTrackId(raw)) {
+    const known = await qqTrackById(raw);
+    if (!known) fail("unavailable", t("歌曲暂不可用"));
+    return resolveStream({ track: known, quality });
   }
   const track = await trackOf(id);
   return resolveStream({ track, quality });

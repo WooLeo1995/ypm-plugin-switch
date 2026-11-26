@@ -103,5 +103,6 @@
   "高音质": "Haute qualité",
   "高音质 (320k)": "Haute qualité (320k)",
   "默认会先探测直链是否真的可播；打开后直接采信音源返回值，可能遇到失效链接": "Par défaut, le lien direct est testé pour vérifier qu’il est lisible ; si activé, le résultat de la source est accepté tel quel et peut être obsolète",
-  "默认喜欢歌单不能改名或删除": "La playlist par défaut « Titres aimés » ne peut pas être renommée ni supprimée"
+  "默认喜欢歌单不能改名或删除": "La playlist par défaut « Titres aimés » ne peut pas être renommée ni supprimée",
+  "专辑暂不可用": "Album indisponible"
 }

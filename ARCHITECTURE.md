@@ -2,9 +2,10 @@
 
 本插件把「曲库」和「音源」拆开：
 
-- **曲库**（搜索、首页、歌手、专辑、歌单、歌词）来自网易云客户端的匿名 eapi 接口。
+- **曲库**（搜索、首页、歌手、专辑、歌单、歌词）以网易云客户端的匿名 eapi 接口为主。
   不需要登录，也不保存任何凭据。歌曲搜索在网易云没有匹配结果时，由酷我搜索兜底
-  （结果 id 形如 `kw:<rid>`，播放仍走音源网关）。
+  （结果 id 形如 `kw:<rid>`）；歌手页还会用 QQ 音乐的匿名专辑列表补上网易云缺失的
+  专辑（专辑 id 形如 `qq-album:<mid>`，曲目 id 形如 `qq:<songmid>`）。播放都仍走音源网关。
 - **音源**（`stream()` 返回的音频直链）由一个网关解析。网关按顺序尝试多个互不相关的
   第三方音源，逐个校验直链确实可播，任一环节失败就自动切到下一个。所有音源都免登录。
 
@@ -24,11 +25,12 @@
 plugin.json                插件清单与网络权限
 index.js                   宿主导出入口（只做转发与菜单）
 i18n.js                    host.t 包装
-catalog/                   网易云匿名曲库 + 本地歌单
+catalog/                   网易云匿名曲库 + 酷我 / QQ 专辑补全 + 本地歌单
   client.js                eapi 客户端（AES-128-ECB + MD5 摘要）
   models.js                Track / Album / Artist / Playlist 映射与元数据缓存
   library.js               search / home / browse / album / artist / playlist / lyrics
   kuwo.js                  酷我搜索兜底、kw:<rid> 映射与元数据快照
+  qq.js                    QQ 匿名歌手专辑 / 专辑详情 / 歌词与 qq:<mid> 快照
   playlists.js             免登录本地歌单：创建、改名、加歌、移歌、删除（host.storage）
 gateway/                   音源网关
   index.js                 resolveStream：排序、预算、缓存、熔断、探测、回退
@@ -135,6 +137,27 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 - 喜欢 / 本地歌单：搜索返回时把曲目快照记进 `host.storage` 的 `kuwoTracks`（最多 200 条），
   同时写进 `models.js` 的内存缓存；宿主之后只传 id 也能补齐歌名、歌手、专辑。
 - 歌词：酷我歌词接口未接入，`lyrics()` 对 `kw:` 返回空 LRC，播放器显示「暂无歌词」。
+
+## 歌手页专辑补全（QQ）
+
+宿主歌手页只渲染插件 `artist()` 返回的 `albums`，点专辑再调 `album(id)`，所以补全专辑
+不需要改宿主：
+
+- `artist(id)` 先取网易云歌手与专辑；拿歌手名去 QQ `smartbox_new.fcg` 找 singerMid，
+  再调 `music.musichallAlbum.AlbumListServer.GetAlbumList` 取匿名专辑列表。
+- 按专辑名去重（去掉空格、标点、括号说明，允许「精选」这类 1–4 字的差别），只把
+  网易云没有的专辑追加进去。专辑 id 用 `qq-album:<albumMid>`，封面用
+  `y.gtimg.cn/music/photo_new/T002R300x300M000<albumMid>.jpg`，发行日期取 QQ 的
+  `publishDate`，类型按 `albumType` 映射成 album / single / ep / compilation。
+- `album(id)` 遇到 `qq-album:` 时调 `GetAlbumDetail` + `GetAlbumSongList`，曲目 id 用
+  `qq:<songmid>`；曲目元数据写进 `host.storage` 的 `qqTracks`（最多 300 条）和
+  `models.js` 内存缓存，喜欢 / 本地歌单 / 播放列表刷新后只靠 id 也能补齐。
+- `stream(id)` 遇到 `qq:` 时先取缓存的元数据（没有就调 `get_song_detail_yqq`），再把
+  歌名 / 歌手 / 时长交给现有网关；按 ID 的链路会跳过，酷我 / GDStudio 的关键词链路
+  负责找到可播直链。QQ 官方 vkey 仍然需要登录，这里不使用。
+- `lyrics(id)` 遇到 `qq:` 时调匿名歌词接口 `fcg_query_lyric_new.fcg`。
+- QQ 的 smartbox / musicu / 歌词都匿名可用；任何一步失败都回退成网易云专辑，不影响
+  原有歌手页。
 
 ## 音源接口
 
@@ -279,6 +302,25 @@ resolveStream({ track, quality })
 - 音频 CDN 实测域名 `*.kuwo.cn`（`bd-bj` / `bd-er` / `kw-bj` / `kw-er`），
   http 地址改成 https 后同样可播。
 
+### QQ 音乐匿名接口
+
+- 歌手搜索：`GET https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?key=<歌手名>&format=json`
+  → `data.singer.itemlist[]`，取 `mid`。
+- `POST https://u.y.qq.com/cgi-bin/musicu.fcg`，JSON body：
+  `{ comm: { ct:24, cv:4747474, format:"json", platform:"yqq.json", uin:"0", ... }, ...请求 }`
+  - 专辑列表：`music.musichallAlbum.AlbumListServer.GetAlbumList`
+    `{ singerMid, begin:0, num:100, order:1 }` → `req.data.albumList[]`，
+    字段 `albumMid / albumName / albumType / publishDate / singerName`。
+  - 专辑详情：`music.musichallAlbum.AlbumInfoServer.GetAlbumDetail`（`albumMid`）
+    + `music.musichallAlbum.AlbumSongList.GetAlbumSongList`（`albumMid, begin:0, num:100`）
+    → `songs.data.songList[].songInfo`，字段 `mid / name / interval(秒) / singer[]`。
+  - 歌曲详情：`music.pf_song_detail_svr.get_song_detail_yqq`（`song_mid`）→ `data.track_info`。
+- 歌词：`GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=<mid>&format=json&nobase64=1&g_tk=5381`
+  → `{ lyric, trans }`；`nobase64=1` 时是明文 LRC。
+- 封面：`https://y.gtimg.cn/music/photo_new/T002R300x300M000<albumMid>.jpg`。
+- 播放地址 `music.vkey.GetVkey` 匿名返回 `101404`（无 purl），所以 QQ 曲目只借元数据，
+  播放交给酷我 / GDStudio 的关键词匹配。
+
 ## 网络权限
 
 `plugin.json` 声明：
@@ -291,6 +333,9 @@ search.kuwo.cn                酷我搜索
 bd-api.kuwo.cn                酷我波点
 mobi.kuwo.cn                  酷我移动
 *.kuwo.cn                     酷我音频 CDN（探测用）
+u.y.qq.com                    QQ 音乐 musicu 匿名接口
+c.y.qq.com                    QQ 音乐 smartbox / 歌词匿名接口
+y.gtimg.cn                    QQ 专辑封面
 ```
 
 音频最终由宿主播放器拉取，不经过插件；插件只对候选直链做一次 HEAD/短 Range 探测。

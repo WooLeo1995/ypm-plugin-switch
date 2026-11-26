@@ -103,5 +103,6 @@
   "高音质": "Hohe Qualität",
   "高音质 (320k)": "Hohe Qualität (320k)",
   "默认会先探测直链是否真的可播；打开后直接采信音源返回值，可能遇到失效链接": "Standardmäßig wird der Direktlink geprüft. Wenn aktiviert, wird das Ergebnis der Quelle ungeprüft übernommen und kann veraltet sein",
-  "默认喜欢歌单不能改名或删除": "Die Standard-Playlist „Lieblingstitel“ kann nicht umbenannt oder gelöscht werden"
+  "默认喜欢歌单不能改名或删除": "Die Standard-Playlist „Lieblingstitel“ kann nicht umbenannt oder gelöscht werden",
+  "专辑暂不可用": "Album nicht verfügbar"
 }

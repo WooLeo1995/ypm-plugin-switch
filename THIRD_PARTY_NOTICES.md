@@ -19,8 +19,9 @@
 | --- | --- | --- |
 | [lymzzyh/ypm-plugin-netease](https://github.com/lymzzyh/ypm-plugin-netease) | 网易云 eapi 端点、请求参数与曲库字段映射的公开实现 | MIT，Copyright (c) 2026 lymzzyh |
 | [lymzzyh/ypm-plugin-qqmusic](https://github.com/lymzzyh/ypm-plugin-qqmusic) | YesPlayMusic 插件 ABI 的用法与工程结构 | MIT，Copyright (c) 2026 lymzzyh |
+| [TIMER-err/qplayer-qqmusic-plugin](https://github.com/TIMER-err/qplayer-qqmusic-plugin) | `src/main.js` 中 QQ 音乐 musicu、smartbox 与匿名歌词接口的用法（歌手页专辑补全） | MIT，Copyright (c) 2026 TIMER-err |
 
-以上上游项目均以 MIT 许可发布。本项目的曲库客户端、数据映射与网关均为自行实现，两个 ypm-plugin 项目没有代码被直接复制；qplayer 的两个插件只有上述音源解析部分被移植改写。所有上游项目与本项目没有隶属或背书关系。
+以上上游项目均以 MIT 许可发布。本项目的曲库客户端、数据映射、QQ 专辑补全与网关均为自行实现，两个 ypm-plugin 项目没有代码被直接复制；qplayer 的两个插件只有上述音源解析部分被移植改写，QQ 曲库接口为按其公开用法重写。所有上游项目与本项目没有隶属或背书关系。
 
 ## MIT 许可声明
 

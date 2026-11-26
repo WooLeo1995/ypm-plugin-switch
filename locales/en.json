@@ -103,5 +103,6 @@
   "高音质": "High",
   "高音质 (320k)": "High (320k)",
   "默认会先探测直链是否真的可播；打开后直接采信音源返回值，可能遇到失效链接": "By default the direct link is probed to confirm it plays; when enabled, the source result is trusted directly and may be a stale link",
-  "默认喜欢歌单不能改名或删除": "The default Liked Songs playlist cannot be renamed or deleted"
+  "默认喜欢歌单不能改名或删除": "The default Liked Songs playlist cannot be renamed or deleted",
+  "专辑暂不可用": "Album unavailable"
 }

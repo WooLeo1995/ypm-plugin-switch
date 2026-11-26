@@ -3,6 +3,7 @@
 import { api, fail } from "./client.js";
 import * as model from "./models.js";
 import { isKuwoTrackId, kuwoTrackById } from "./kuwo.js";
+import { isQqTrackId, qqTrackById } from "./qq.js";
 import { t } from "../i18n.js";
 
 const STORAGE_KEY = "localPlaylists";
@@ -254,9 +255,10 @@ async function loadTracks(ids) {
   const known = new Map();
   const missing = [];
   for (const id of ids) {
-    const cached = model.cachedMeta(id) || (isKuwoTrackId(id) ? kuwoTrackById(id) : null);
+    let cached = model.cachedMeta(id) || (isKuwoTrackId(id) ? kuwoTrackById(id) : null);
+    if (!cached && isQqTrackId(id)) cached = await qqTrackById(id);
     if (cached) known.set(id, cached);
-    else if (!isKuwoTrackId(id)) missing.push(id);
+    else if (!isKuwoTrackId(id) && !isQqTrackId(id)) missing.push(id);
   }
   if (missing.length) {
     for (const track of await fetchTracks(missing)) known.set(String(track.id), track);
@@ -368,7 +370,7 @@ export async function addToPlaylist({ id, trackIds } = {}) {
   const item = requirePlaylist(state, id);
   const existing = new Set(item.tracks.map((track) => track.id));
   const ids = [...new Set((Array.isArray(trackIds) ? trackIds : []).map(String)
-    .filter((value) => isNumericId(value) || isKuwoTrackId(value)))]
+    .filter((value) => isNumericId(value) || isKuwoTrackId(value) || isQqTrackId(value)))]
     .filter((value) => !existing.has(value));
   if (!ids.length) return summary(item);
 
@@ -464,7 +466,7 @@ export function isLiked({ ids } = {}) {
 
 export async function like({ id, on } = {}) {
   const trackId = String(id ?? "");
-  if (!isNumericId(trackId) && !isKuwoTrackId(trackId)) fail("unavailable", "无效的网易云资源编号");
+  if (!isNumericId(trackId) && !isKuwoTrackId(trackId) && !isQqTrackId(trackId)) fail("unavailable", "无效的网易云资源编号");
   const state = load();
   const item = ensureLiked(state);
   if (!on) {

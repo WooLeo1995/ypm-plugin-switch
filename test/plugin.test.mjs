@@ -134,10 +134,13 @@ test("plugin.json：网络权限覆盖全部曲库与音源域名，且不申请
     "*.kuwo.cn",
     "*.music.126.net",
     "bd-api.kuwo.cn",
+    "c.y.qq.com",
     "interfacepc.music.163.com",
     "mobi.kuwo.cn",
     "music-api.gdstudio.xyz",
     "search.kuwo.cn",
+    "u.y.qq.com",
+    "y.gtimg.cn",
   ].sort());
   assert.equal(manifest.permissions.process, undefined, "本插件不需要运行本机程序");
 });
