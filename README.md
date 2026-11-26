@@ -42,6 +42,7 @@ Before installation the app lists the network permissions the plugin needs (NetE
 This only applies to **track** search; playlist, album and artist pages are unaffected:
 
 - If no NetEase result on the page matches both the title and the artist (for example only covers, instrumentals or DJ edits are returned), the plugin searches Kuwo instead.
+- For title-only searches, if the first page is all covers (the title or album says Cover / 翻自 / 原唱 and the original artist is not on the page), the plugin also switches to Kuwo so the original is ranked first.
 - Fallback results are not mixed with NetEase results: once a query falls back, the first page and all later pages come from Kuwo, so the two offset schemes cannot interleave.
 - If Kuwo has no matching result either, the original NetEase results are kept instead of showing an empty page.
 - Kuwo tracks can be played, liked and added to local playlists; their metadata is cached. Kuwo lyric endpoints are not wired up, so the player shows "No lyrics" for them.

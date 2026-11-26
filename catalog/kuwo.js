@@ -138,6 +138,43 @@ export function hasRelevantTrack(tracks, query) {
   });
 }
 
+const COVER_MARK = /(?:cover|翻自|翻唱|原唱)\s*[:：]?\s*([^()（）\[\]【】]+)/i;
+const COVER_STOP = /^(?:the|a|an|version|ver|live|remix|伴奏|纯音乐|翻唱|cover)$/i;
+
+function coverArtistsOf(tracks) {
+  const found = new Set();
+  for (const track of tracks.slice(0, 20)) {
+    const source = `${track?.name || ""} ${track?.album?.name || ""}`;
+    const match = COVER_MARK.exec(source);
+    if (!match) continue;
+    const artist = match[1].replace(/[\s)）\]】,，;；/|].*$/, "").trim();
+    if (artist.length >= 2 && artist.length <= 24 && !COVER_STOP.test(artist)) found.add(artist);
+  }
+  return [...found];
+}
+
+// 单曲名搜索时，网易云第一页可能全是翻唱（原唱在第二页以后）。
+// 从「Cover：某某 / 翻自 某某」里认出原唱歌手；如果第一页没有这位歌手的同名曲，
+// 就认为这一页只搜到了翻唱，交给酷我兜底。
+export function coverOnlyHint(tracks, query) {
+  const list = Array.isArray(tracks) ? tracks : [];
+  const keyword = String(query == null ? "" : query).trim();
+  if (!keyword || /[\s,，、;；/|]+/.test(keyword) || !list.length) return { coverOnly: false, artists: [] };
+  const artists = coverArtistsOf(list);
+  if (!artists.length) return { coverOnly: false, artists: [] };
+  return { coverOnly: !containsOriginalArtist(list, keyword, artists), artists };
+}
+
+export function containsOriginalArtist(tracks, title, artists) {
+  const want = normalizeName(title);
+  const names = new Set((Array.isArray(artists) ? artists : []).map((name) => String(name || "").trim()).filter(Boolean));
+  if (!want || !names.size) return false;
+  return (Array.isArray(tracks) ? tracks : []).some((track) => {
+    if (normalizeName(track?.name) !== want) return false;
+    return (track?.artists || []).some((artist) => names.has(String(artist?.name || "").trim()));
+  });
+}
+
 function pruneFallbacks(now) {
   for (const [key, at] of fallbackQueries) {
     if (now - at > FALLBACK_TTL) fallbackQueries.delete(key);

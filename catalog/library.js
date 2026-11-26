@@ -1,7 +1,7 @@
 // 匿名曲库：搜索、发现、详情、歌词。所有请求都走 eapi，无需登录。
 import { api, fail, id } from "./client.js";
 import * as model from "./models.js";
-import { forgetFallbackQuery, hasRelevantTrack, isFallbackQuery, isKuwoTrackId, rememberFallbackQuery, searchKuwoTracks } from "./kuwo.js";
+import { containsOriginalArtist, coverOnlyHint, forgetFallbackQuery, hasRelevantTrack, isFallbackQuery, isKuwoTrackId, rememberFallbackQuery, searchKuwoTracks } from "./kuwo.js";
 import { t } from "../i18n.js";
 
 const PAGE = 50;
@@ -52,11 +52,17 @@ export async function search({ query = "", kind = "tracks", offset = 0 }) {
     // 只在第一页判断「结果不沾边」；后续页结果不相关也不混入酷我，
     // 否则会把两边的分页结果拼在一起。
     const irrelevant = start === 0 && !empty && !hasRelevantTrack(mapped, keyword);
-    if (empty ? zero : irrelevant) {
+    // 单曲名搜索的另一种情况：第一页全是翻唱，原唱被排到第二页以后。
+    // 从「Cover：某某 / 翻自 某某」识别出原唱，第一页却没有这位歌手的同名曲。
+    const cover = start === 0 && !empty ? coverOnlyHint(mapped, keyword) : null;
+    const coverOnly = Boolean(cover?.coverOnly);
+    if (empty ? zero : (irrelevant || coverOnly)) {
       const fallback = await searchKuwoTracks({ query: keyword, offset: start });
       // 网易云有结果、但只是同名翻唱时，酷我也得真能对上这首歌才替换，
       // 否则保留网易云结果，别把搜索换成另一批不相干的结果。
-      const usable = fallback.tracks.length && (empty || hasRelevantTrack(fallback.tracks, keyword));
+      const coverHit = coverOnly && containsOriginalArtist(fallback.tracks, keyword, cover.artists);
+      const usable = fallback.tracks.length
+        && (empty || (coverOnly ? coverHit : hasRelevantTrack(fallback.tracks, keyword)));
       if (usable) {
         rememberFallbackQuery(keyword);
         console.info(`[switch] search fallback to kuwo: ${fallback.tracks.length} tracks`);
