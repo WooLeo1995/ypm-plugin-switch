@@ -22,9 +22,11 @@ export default {
   kind: "keyword",
 
   async resolve(ctx) {
-    const hit = await findKuwoTrack(ctx?.track, ctx);
-    const rid = hit ? ridOf(hit) : "";
-    if (!rid) return null;
+    // 搜索兜底的曲目已经带 rid，跳过关键词搜索直接取址。
+    const hint = String(ctx?.rid || "");
+    const hit = hint ? null : await findKuwoTrack(ctx?.track, ctx);
+    const rid = hint || (hit ? ridOf(hit) : "");
+    if (!/^\d+$/.test(rid)) return null;
     const query = `corp=kuwo&source=${SOURCE}&p2p=1&type=convert_url2&sig=0&format=mp3&rid=${rid}`;
     const body = await getText(`${MOBI_URL}?f=kuwo&q=${encodeURIComponent(encryptQuery(query))}`, {
       headers: { "User-Agent": "okhttp/3.10.0" },

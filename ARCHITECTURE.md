@@ -2,8 +2,9 @@
 
 本插件把「曲库」和「音源」拆开：
 
-- **曲库**（搜索、首页、歌手、专辑、歌单、歌词）全部来自网易云客户端的匿名 eapi 接口。
-  不需要登录，也不保存任何凭据。
+- **曲库**（搜索、首页、歌手、专辑、歌单、歌词）来自网易云客户端的匿名 eapi 接口。
+  不需要登录，也不保存任何凭据。歌曲搜索在网易云没有匹配结果时，由酷我搜索兜底
+  （结果 id 形如 `kw:<rid>`，播放仍走音源网关）。
 - **音源**（`stream()` 返回的音频直链）由一个网关解析。网关按顺序尝试多个互不相关的
   第三方音源，逐个校验直链确实可播，任一环节失败就自动切到下一个。所有音源都免登录。
 
@@ -27,6 +28,7 @@ catalog/                   网易云匿名曲库 + 本地歌单
   client.js                eapi 客户端（AES-128-ECB + MD5 摘要）
   models.js                Track / Album / Artist / Playlist 映射与元数据缓存
   library.js               search / home / browse / album / artist / playlist / lyrics
+  kuwo.js                  酷我搜索兜底、kw:<rid> 映射与元数据快照
   playlists.js             免登录本地歌单：创建、改名、加歌、移歌、删除（host.storage）
 gateway/                   音源网关
   index.js                 resolveStream：排序、预算、缓存、熔断、探测、回退
@@ -106,6 +108,29 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
   曲目属于最近打开的那个歌单」时才显示「收藏歌单：<歌单名>」/「取消收藏歌单：<歌单名>」。
   打开本地歌单会清空这个上下文。它只是菜单展示用的短期状态，不写入存储，也不影响收藏数据。
 - **边界**：收藏的是别人的歌单，不能改名/删除；网易云下架后打开会正常报错。
+
+## 搜索兜底（酷我）
+
+网易云的模糊搜索几乎不会返回空结果，但经常只返回同名翻唱、伴奏或 DJ 版。所以兜底不是
+「结果数为 0」才触发，而是看第一页结果是否真的对得上查询：
+
+- 只对 `kind: "tracks"` 生效；首页、歌单、专辑、歌手页不变。
+- 用 `hasRelevantTrack()` 判断：歌名匹配查询、多个词的查询还要对上歌手、歌名里的版本
+  限定语（Live / 伴奏 / cover…）也要出现在查询里；查询只是一个歌手名时，只认该歌手
+  演唱的结果。这样「林宥嘉 说谎」不会因为搜到同名翻唱就算命中。
+- 判定兜底后，**整页结果都来自酷我**，不与网易云结果混排；后续分页直接按 `offset`
+  向酷我要下一页（内存里记 30 分钟，插件重启后靠网易云 `songCount` 仍能重新判定）。
+- 酷我也匹配不上时保留网易云结果；网易云本来就是空页时返回空。
+- 映射：`id = kw:<MUSICRID 数字>`、`name = SONGNAME`、`artists = ARTIST 按 & 拆分`、
+  `album.name = ALBUM`、封面 `img1.kuwo.cn/star/albumcover/300/...`、`duration` 秒转毫秒、
+  `url = https://www.kuwo.cn/play_detail/<rid>`。歌手和专辑 id 留空，宿主不会把它们
+  链到网易云的详情页。
+- 播放：`stream({ id: "kw:..." })` 不查网易云歌曲详情；`resolveStream` 从 id 取出 rid，
+  优先走酷我族，并把 `rid` 直接交给波点 / 移动链路，跳过关键词搜索。右键菜单的复制 /
+  检测链接同样支持 `kw:`。
+- 喜欢 / 本地歌单：搜索返回时把曲目快照记进 `host.storage` 的 `kuwoTracks`（最多 200 条），
+  同时写进 `models.js` 的内存缓存；宿主之后只传 id 也能补齐歌名、歌手、专辑。
+- 歌词：酷我歌词接口未接入，`lyrics()` 对 `kw:` 返回空 LRC，播放器显示「暂无歌词」。
 
 ## 音源接口
 
@@ -214,10 +239,16 @@ resolveStream({ track, quality })
 
 ### 酷我搜索
 
-- `GET https://search.kuwo.cn/r.s?&correct=1&stype=comprehensive&encoding=utf8&rformat=json&mobi=1&show_copyright_off=1&searchapi=6&all=<关键词>`
-- 结果：`content[1].musicpage.abslist[]`，字段 `SONGNAME`、`ARTIST`、`DURATION`（秒）、
+- 关键词匹配链路（波点 / 移动取址前查 rid）用综合搜索：
+  `GET https://search.kuwo.cn/r.s?&correct=1&stype=comprehensive&encoding=utf8&rformat=json&mobi=1&show_copyright_off=1&searchapi=6&all=<关键词>`
+  → `content[1].musicpage.abslist[]`，字段 `SONGNAME`、`ARTIST`、`DURATION`（秒）、
   `MUSICRID`（`MUSIC_<数字>`）。
-- 版权收紧后主流歌曲多为翻唱 / DJ / 伴奏，必须靠严格匹配拒绝错版本。
+- 搜索兜底用 KT 客户端参数（结果更干净、带专辑 / 封面 / 分页）：
+  `GET https://search.kuwo.cn/r.s?client=kt&all=<关键词>&pn=<0 起页号>&rn=<每页条数>&uid=794762570&ver=kwplayer_ar_9.2.2.1&vipver=1&show_copyright_off=1&newver=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1`
+  → 顶层 `{ PN, RN, SHOW, TOTAL, abslist[] }`，字段 `SONGNAME`、`ARTIST`、`ALBUM`、
+  `DURATION`、`MUSICRID`、`web_albumpic_short`。
+- 版权收紧后主流歌曲多为翻唱 / DJ / 伴奏，必须靠严格匹配拒绝错版本；搜索兜底再用
+  `hasRelevantTrack()` 判断第一页是否真的命中。
 
 ### 酷我波点
 

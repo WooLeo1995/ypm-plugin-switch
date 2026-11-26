@@ -4,12 +4,13 @@ English · [简体中文](README.zh-CN.md)
 
 A community plugin for [YesPlayMusic](https://github.com/qier222/YesPlayMusic) **3.0.0 or newer**. Not an official plugin.
 
-It keeps the **catalog** and the **audio sources** separate. The catalog (search, home, artists, albums, playlists, lyrics) comes from NetEase Cloud Music's anonymous endpoints and needs **no sign-in**. The audio source (the playback direct link) is resolved by a gateway inside the plugin from several third-party sources; every candidate is verified before playback, and failures fall back to the next source. The plugin does not sign in, store credentials, download audio, or redistribute it.
+It keeps the **catalog** and the **audio sources** separate. The catalog (search, home, artists, albums, playlists, lyrics) comes from NetEase Cloud Music's anonymous endpoints and needs **no sign-in**; track searches with no matching NetEase result are filled in from Kuwo. The audio source (the playback direct link) is resolved by a gateway inside the plugin from several third-party sources; every candidate is verified before playback, and failures fall back to the next source. The plugin does not sign in, store credentials, download audio, or redistribute it.
 
 ## Features
 
 - **NetEase catalog without signing in**: track, album, artist and playlist search with paging, search suggestions and hot searches; recommended playlists and new songs on the home page; charts, new albums and popular playlists by category; album, artist and playlist details; original and translated LRC lyrics.
 - **Multi-source gateway**: GDStudio and Kuwo sources are tried in order; a failure switches to the next one automatically.
+- **Kuwo search fallback**: when NetEase has no match, or only covers / instrumentals / DJ edits of the query, the plugin searches Kuwo instead. Those results play directly from Kuwo, with paging, likes and local playlists supported. Playlist, album and artist pages still come from NetEase.
 - **Pre-playback availability check**: candidate direct links are probed before they reach the player, so expired or broken URLs are not handed over.
 - **Circuit breaker and caching**: repeated failures cool down and recover on success; a track that just failed is not retried immediately.
 - **"Source gateway" sidebar page**: shows per-source sample self-test results and the current fallback order.
@@ -25,16 +26,25 @@ It keeps the **catalog** and the **audio sources** separate. The catalog (search
 YesPlayMusic **3.0.0 or newer** is required. The plugin runs in the app's built-in QuickJS engine; no Node.js, server, API key or extra program is needed.
 
 - **Option 1 (recommended)**: open **Settings → Plugins → Install from local folder…** and select the plugin folder that contains `plugin.json`. If you downloaded a ZIP, extract it first; do not select only the `plugin.json` file.
-- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.4.1`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
+- **Option 2**: open **Settings → Plugins → Install plugin** and paste `github.com/WooLeo1995/ypm-plugin-switch`; the app installs the `.zip` from the latest Release. Release tag (`.../releases/tag/v0.6.0`), ZIP and `plugin.json` links also work; see the [plugin development guide](https://github.com/qier222/YesPlayMusic/blob/main/docs/plugins.md).
 
 Before installation the app lists the network permissions the plugin needs (NetEase eapi, GDStudio, NetEase CDN, Kuwo search / Bodian / mobile / CDN). After confirming and enabling it, choose **Source gateway** under **Settings → Plugins → Music source**, or click the avatar at the bottom-left of the sidebar.
 
 ## Usage
 
-1. After selecting the "Source gateway" music source, search, home, album, artist and NetEase playlist contents come from the NetEase catalog; the **Playlists** page of the music library also lists local playlists, Liked Songs and saved playlists.
+1. After selecting the "Source gateway" music source, search, home, album, artist and NetEase playlist contents come from the NetEase catalog; track searches fall back to Kuwo when NetEase has no matching result. The **Playlists** page of the music library also lists local playlists, Liked Songs and saved playlists.
 2. Double-click a track to play it. The gateway first fills in the title, artists and duration through the anonymous API, then asks the sources for direct links in order; only a link that passes probing is returned to the player.
 3. The **Source gateway** sidebar page shows each source's self-test result and the current fallback order.
 4. In the track context menu, **Copy source direct link** resolves and copies a currently usable link; **Check source availability** tries immediately and reports the result.
+
+### Search fallback
+
+This only applies to **track** search; playlist, album and artist pages are unaffected:
+
+- If no NetEase result on the page matches both the title and the artist (for example only covers, instrumentals or DJ edits are returned), the plugin searches Kuwo instead.
+- Fallback results are not mixed with NetEase results: once a query falls back, the first page and all later pages come from Kuwo, so the two offset schemes cannot interleave.
+- If Kuwo has no matching result either, the original NetEase results are kept instead of showing an empty page.
+- Kuwo tracks can be played, liked and added to local playlists; their metadata is cached. Kuwo lyric endpoints are not wired up, so the player shows "No lyrics" for them.
 
 ### Local playlists
 

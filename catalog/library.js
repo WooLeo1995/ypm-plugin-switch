@@ -1,13 +1,15 @@
 // 匿名曲库：搜索、发现、详情、歌词。所有请求都走 eapi，无需登录。
 import { api, fail, id } from "./client.js";
 import * as model from "./models.js";
+import { forgetFallbackQuery, hasRelevantTrack, isFallbackQuery, isKuwoTrackId, rememberFallbackQuery, searchKuwoTracks } from "./kuwo.js";
 import { t } from "../i18n.js";
 
 const PAGE = 50;
 const offsetOf = (value) => Math.max(0, Math.floor(Number(value) || 0));
 
 export async function search({ query = "", kind = "tracks", offset = 0 }) {
-  if (!String(query).trim()) return { [kind]: [], more: false };
+  const keyword = String(query).trim();
+  if (!keyword) return { [kind]: [], more: false };
   const types = { tracks: 1, albums: 10, artists: 100, playlists: 1000 };
   const names = { tracks: "songs", albums: "albums", artists: "artists", playlists: "playlists" };
   const counts = { tracks: "songCount", albums: "albumCount", artists: "artistCount", playlists: "playlistCount" };
@@ -19,8 +21,15 @@ export async function search({ query = "", kind = "tracks", offset = 0 }) {
   };
   if (!types[kind]) fail("unsupported", "不支持这种搜索类型");
   const start = offsetOf(offset);
+
+  // 已经判定该查询要走酷我时，后续分页直接向酷我翻页，不再请求网易云，
+  // 避免两边结果混排、offset 对不上。
+  if (kind === "tracks" && start > 0 && isFallbackQuery(keyword)) {
+    return searchKuwoTracks({ query: keyword, offset: start });
+  }
+
   const result = await api("/api/cloudsearch/pc", {
-    s: String(query).trim(),
+    s: keyword,
     type: types[kind],
     limit: PAGE,
     offset: start,
@@ -30,11 +39,36 @@ export async function search({ query = "", kind = "tracks", offset = 0 }) {
   const items = data[names[kind]] || [];
   const mapped = items.map((value) => mappers[kind](value));
   const total = data[counts[kind]];
-  return {
+  const netease = {
     [kind]: mapped,
     more: typeof total === "number" ? start + items.length < total : Boolean(data.hasMore),
     ...(typeof total === "number" ? { total } : {}),
   };
+
+  if (kind === "tracks") {
+    const empty = mapped.length === 0;
+    const zero = total === 0 || (total == null && start === 0);
+    // 有结果但一条都不沾查询词（例如只搜到同名翻唱、DJ 版）也算没搜到。
+    // 只在第一页判断「结果不沾边」；后续页结果不相关也不混入酷我，
+    // 否则会把两边的分页结果拼在一起。
+    const irrelevant = start === 0 && !empty && !hasRelevantTrack(mapped, keyword);
+    if (empty ? zero : irrelevant) {
+      const fallback = await searchKuwoTracks({ query: keyword, offset: start });
+      // 网易云有结果、但只是同名翻唱时，酷我也得真能对上这首歌才替换，
+      // 否则保留网易云结果，别把搜索换成另一批不相干的结果。
+      const usable = fallback.tracks.length && (empty || hasRelevantTrack(fallback.tracks, keyword));
+      if (usable) {
+        rememberFallbackQuery(keyword);
+        console.info(`[switch] search fallback to kuwo: ${fallback.tracks.length} tracks`);
+        return fallback;
+      }
+      // 酷我没有结果或请求失败时，保留网易云的结果；完全空才返回空。
+      if (!empty) return netease;
+      return { tracks: [], more: false, total: 0 };
+    }
+    if (start === 0) forgetFallbackQuery(keyword);
+  }
+  return netease;
 }
 
 export async function suggest({ query = "" }) {
@@ -138,6 +172,8 @@ export async function artist({ id: value }) {
 }
 
 export async function lyrics({ id: value }) {
+  // 酷我搜索兜底的曲目没有接入歌词接口；返回空歌词，由播放器显示「暂无歌词」。
+  if (isKuwoTrackId(value)) return { lrc: "", translation: "" };
   const data = await api("/api/song/lyric", {
     id: id(value), tv: -1, lv: -1, rv: -1, kv: -1, _nmclfl: 1,
   });

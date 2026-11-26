@@ -2,6 +2,7 @@
 // 歌单与曲目快照存在 host.storage；喜欢 = 默认固定歌单，播放仍走音源网关。
 import { api, fail } from "./client.js";
 import * as model from "./models.js";
+import { isKuwoTrackId, kuwoTrackById } from "./kuwo.js";
 import { t } from "../i18n.js";
 
 const STORAGE_KEY = "localPlaylists";
@@ -253,9 +254,9 @@ async function loadTracks(ids) {
   const known = new Map();
   const missing = [];
   for (const id of ids) {
-    const cached = model.cachedMeta(id);
+    const cached = model.cachedMeta(id) || (isKuwoTrackId(id) ? kuwoTrackById(id) : null);
     if (cached) known.set(id, cached);
-    else missing.push(id);
+    else if (!isKuwoTrackId(id)) missing.push(id);
   }
   if (missing.length) {
     for (const track of await fetchTracks(missing)) known.set(String(track.id), track);
@@ -300,7 +301,7 @@ export function playlists() {
 // 宿主用它从「添加到歌单」里排除已经包含这首歌的歌单（可选 ABI，宿主不支持时忽略）。
 export function trackPlaylists({ trackId } = {}) {
   const id = String(trackId ?? "");
-  if (!/^\d+$/.test(id)) return [];
+  if (!id) return [];
   const state = load();
   ensureLiked(state);
   return state.items
@@ -366,7 +367,8 @@ export async function addToPlaylist({ id, trackIds } = {}) {
   ensureLiked(state);
   const item = requirePlaylist(state, id);
   const existing = new Set(item.tracks.map((track) => track.id));
-  const ids = [...new Set((Array.isArray(trackIds) ? trackIds : []).map(String).filter(isNumericId))]
+  const ids = [...new Set((Array.isArray(trackIds) ? trackIds : []).map(String)
+    .filter((value) => isNumericId(value) || isKuwoTrackId(value)))]
     .filter((value) => !existing.has(value));
   if (!ids.length) return summary(item);
 
@@ -462,7 +464,7 @@ export function isLiked({ ids } = {}) {
 
 export async function like({ id, on } = {}) {
   const trackId = String(id ?? "");
-  if (!isNumericId(trackId)) fail("unavailable", "无效的网易云资源编号");
+  if (!isNumericId(trackId) && !isKuwoTrackId(trackId)) fail("unavailable", "无效的网易云资源编号");
   const state = load();
   const item = ensureLiked(state);
   if (!on) {

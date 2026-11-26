@@ -2,6 +2,7 @@
 import { api, fail } from "./catalog/client.js";
 import * as model from "./catalog/models.js";
 import { resolveStream } from "./gateway/index.js";
+import { isKuwoTrackId, kuwoTrackById } from "./catalog/kuwo.js";
 
 async function trackOf(value) {
   const songId = String(value ?? "");
@@ -20,6 +21,15 @@ async function trackOf(value) {
 }
 
 export async function stream({ id, quality = "high" } = {}) {
+  const raw = String(id ?? "");
+  // 酷我搜索兜底的曲目已经带 rid，不需要（也不能）再查网易云歌曲详情。
+  if (isKuwoTrackId(raw)) {
+    const known = kuwoTrackById(raw);
+    return resolveStream({
+      track: known || { id: raw, name: "", artists: [], album: {}, duration: 0 },
+      quality,
+    });
+  }
   const track = await trackOf(id);
   return resolveStream({ track, quality });
 }

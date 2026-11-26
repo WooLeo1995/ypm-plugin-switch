@@ -3,6 +3,7 @@ import { t } from "./i18n.js";
 import { fail } from "./catalog/client.js";
 import * as library from "./catalog/library.js";
 import * as localPlaylists from "./catalog/playlists.js";
+import { isKuwoTrackId } from "./catalog/kuwo.js";
 import { qualityLabel } from "./gateway/quality.js";
 import { resolveStream, trackForGateway } from "./gateway/index.js";
 import { browseSources, runSelfTest } from "./gateway/selftest.js";
@@ -55,10 +56,12 @@ export async function browse({ page = "" } = {}) {
 }
 
 export function trackMenu({ track, playlist } = {}) {
-  // 有曲目信息时只给自己的曲目加菜单；本地音乐或其他音源的 ID 不是网易云编号。
+  // 有曲目信息时只给自己的曲目加菜单；本地音乐或其他音源的 ID 不是本插件编号。
+  // 网易云曲目是纯数字，酷我搜索兜底的曲目是 kw:<rid>。
   // 宿主没传曲目（例如只问菜单定义）时照常返回条目。
   if (track) {
-    if (!/^\d+$/.test(String(track.id ?? ""))) return [];
+    const id = String(track.id ?? "");
+    if (!/^\d+$/.test(id) && !isKuwoTrackId(id)) return [];
     if (track.source && track.source !== "switch") return [];
   }
   const items = [

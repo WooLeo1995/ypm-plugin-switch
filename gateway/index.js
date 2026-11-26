@@ -50,6 +50,8 @@ export function resolveStream(options = {}) {
 async function resolveOnce({ track, quality, hostQuality } = {}) {
   const trackId = String(track?.id || "");
   if (!trackId) throw unavailable(t("无效的网易云资源编号"));
+  // 酷我搜索兜底的曲目 id 形如 kw:<rid>：直接按 rid 取址，优先走酷我族。
+  const exactRid = /^kw:(\d+)$/.exec(trackId)?.[1] || "";
   const requested = resolveQuality(hostQuality || quality, setting("quality"));
   const verify = !flag("skipVerify");
 
@@ -70,7 +72,10 @@ async function resolveOnce({ track, quality, hostQuality } = {}) {
   const failed = recentFailure(trackId, requested);
   if (failed) throw unavailable(t("没有可用音源，请稍后重试"), failed.reason ? [failed.reason] : []);
 
-  const providers = orderedProviders();
+  const ordered = orderedProviders();
+  const providers = exactRid
+    ? [...ordered.filter((provider) => provider.family === "kuwo"), ...ordered.filter((provider) => provider.family !== "kuwo")]
+    : ordered;
   if (!providers.length) {
     throw unavailable(t("GDStudio 与酷我音源都被停用，请在插件设置中启用至少一个音源"), [t("没有启用的音源")]);
   }
@@ -90,7 +95,7 @@ async function resolveOnce({ track, quality, hostQuality } = {}) {
     }
     const started = Date.now();
     try {
-      const found = await provider.resolve({ track, quality: requested, deadline });
+      const found = await provider.resolve({ track, quality: requested, deadline, rid: exactRid });
       if (!found?.url) {
         health.recordMiss(provider.id);
         attempts.push(`${t(provider.label)}:${t("未命中")}`);
