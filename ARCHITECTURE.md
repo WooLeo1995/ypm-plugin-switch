@@ -68,7 +68,7 @@ scripts/live-check.mjs     实网冒烟脚本（手动运行）
 | `isLiked({ ids })` | `{ id: boolean }`，决定爱心是否点亮 |
 | `like({ id, on })` | 加入 / 移出「我喜欢的音乐」 |
 | `savePlaylist({ id, on })` | 收藏 / 取消收藏某个网易云歌单（只存卡片元数据） |
-| `trackPlaylists({ trackId })` | 可选：这首歌已在哪些歌单里（宿主用于「添加到歌单」排除已含歌单） |
+| `trackPlaylists({ trackId })` | 可选能力：这首歌已在哪些歌单里。上游当前只跳过「当前歌单」，尚未接入该能力；保留给后续宿主使用 |
 | `lyrics({ id })` | 原文 + 翻译 LRC |
 | `stream({ id, quality })` | 网关解析出的 `AudioStream` |
 | `trackMenu({ track })` / `menuAction({ id, track })` | 复制直链 / 检测音源 |

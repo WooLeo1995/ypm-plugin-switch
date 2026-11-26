@@ -41,7 +41,7 @@ Before installation the app lists the network permissions the plugin needs (NetE
 Local playlists need no sign-in and are not synced to a NetEase account:
 
 1. In a track's context menu choose **Add to playlist**, then **New playlist**, and enter a name to create a playlist containing that track. Tracks can also be added to an existing local playlist.
-2. The plugin reports which playlists already contain the track; hosts that support it hide those playlists from the *Add to playlist* menu to avoid duplicates.
+2. The plugin reports which playlists already contain the track (the optional `trackPlaylists` capability). The current host only skips the playlist the menu was opened from; once the host uses the capability, every playlist already containing the track is hidden.
 2. Local playlists appear on the **Playlists** page of the music library. Open one to play it, or remove tracks from it.
 3. Playback still goes through the source gateway: a local playlist stores only metadata snapshots, never audio, so whether a track plays depends on whether a source offers a playable direct link.
 4. Rename, drag-to-reorder and delete-playlist are exported by the plugin; whether their interface entries appear depends on the player version. The YesPlayMusic 3.0.0 interface currently offers creating a playlist, adding tracks and removing tracks from a playlist.
