@@ -85,7 +85,7 @@ Default order:
 3. **Kuwo mobile** (mobile `convert_url2` endpoint)
 4. **GDStudio Search** (keyword search with strict matching)
 
-ID-based links are the fastest and hit most often; the two Kuwo routes complement each other; keyword search comes last because it must match the version, artists and duration and is slower and easier to get wrong. The keyword routes only accept a result when the title, version qualifier and artists match and, when both durations are known, differ by no more than 8 seconds; they would rather return nothing than mistake an instrumental, DJ edit or cover for the original.
+ID-based links are the fastest and hit most often; the two Kuwo routes complement each other; keyword search comes last because it must match the version, artists and duration and is slower and easier to get wrong. The keyword routes only accept a result when the title, version qualifier and artists match and, when both durations are known, differ by no more than 8 seconds; they would rather return nothing than mistake an instrumental, DJ edit or cover for the original. Kuwo keyword matching first tries the old comprehensive search and, if that misses, retries with the KT client search, whose results are more complete; this rescues tracks that NetEase has metadata for but no usable direct link.
 
 - **Preferred source** set to "Prefer GDStudio" puts the two GDStudio routes before Kuwo; "Prefer Kuwo" tries Kuwo first; "Automatic" uses the default order above.
 - **Disable GDStudio source** or **Disable Kuwo source** removes that whole family from the attempt list. Disabling both makes playback fail with a request to enable at least one source in settings.

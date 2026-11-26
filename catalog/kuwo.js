@@ -1,11 +1,10 @@
 // 酷我搜索兜底：网易云曲库搜不到时，用酷我曲库补结果。
 // 结果 id 形如 kw:<rid>，播放时网关直接按 rid 取址，不再依赖歌名关键词匹配。
-import { getJson } from "../gateway/sources/http.js";
+import { searchKuwoKt } from "../gateway/sources/kuwo-search.js";
 import { normalizeName, versionKey } from "../gateway/match.js";
 import * as model from "./models.js";
 import { t } from "../i18n.js";
 
-const SEARCH = "https://search.kuwo.cn/r.s";
 const PAGE = 50;
 const STORAGE_KEY = "kuwoTracks";
 const LIMIT = 200;
@@ -60,13 +59,18 @@ function durationOf(value) {
   return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1000) : 0;
 }
 
+// 酷我歌名常拼上「-《剧名》主题曲」这类说明；展示与匹配都用干净的歌名。
+function cleanTitle(value) {
+  return decode(value).replace(/[-—]\s*《[^》]*》[\s\S]*$/, "").trim();
+}
+
 function mapRow(row) {
   const rid = ridOf(row);
   if (!rid) return null;
   const cover = coverOf(row.web_albumpic_short);
   const track = {
     id: kuwoTrackId(rid),
-    name: decode(row.SONGNAME || row.NAME) || t("未知歌曲"),
+    name: cleanTitle(row.SONGNAME || row.NAME) || t("未知歌曲"),
     artists: artistsOf(row.ARTIST || row.FARTIST),
     album: {
       id: "",
@@ -247,18 +251,15 @@ export async function searchKuwoTracks({ query, offset = 0 } = {}) {
   if (!keyword) return { tracks: [], more: false, total: 0 };
   const start = Math.max(0, Math.floor(Number(offset) || 0));
   const page = Math.floor(start / PAGE);
-  const url = `${SEARCH}?client=kt&all=${encodeURIComponent(keyword)}&pn=${page}&rn=${PAGE}`
-    + "&uid=794762570&ver=kwplayer_ar_9.2.2.1&vipver=1&show_copyright_off=1"
-    + "&newver=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1";
   let data;
   try {
-    data = await getJson(url, { timeout: 8000 });
+    data = await searchKuwoKt(keyword, null, { pn: page, rn: PAGE });
   } catch (error) {
     console.warn("[switch] kuwo search failed:", error?.message || error);
     return { tracks: [], more: false, total: 0 };
   }
-  const rows = Array.isArray(data?.abslist) ? data.abslist : [];
-  const total = Number(data?.TOTAL) || 0;
+  const rows = data.rows;
+  const total = data.total;
   let tracks = rows.map(mapRow).filter(Boolean);
   const skip = start % PAGE;
   if (skip) tracks = tracks.slice(skip);

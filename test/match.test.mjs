@@ -36,6 +36,19 @@ test("版本限定语必须逐字比较，未知限定语不能被忽略", async
   assert.equal(m.isMatch("晴天 (Remastered)", "周杰伦", "晴天", "周杰伦", 0, 0), true);
 });
 
+test("酷我歌名后的「-《剧名》…」说明不影响匹配", async () => {
+  const { plugin: m } = await matcher();
+  assert.equal(m.normalizeName("脆弱一分钟-《爱情进化论》电视剧片头曲"), "脆弱一分钟");
+  assert.equal(
+    m.isMatch("脆弱一分钟-《爱情进化论》电视剧片头曲", "林宥嘉", "脆弱一分钟", "林宥嘉", 192992, 192000),
+    true,
+  );
+  assert.equal(
+    m.isMatch("说谎-《杜拉拉升职记》电视剧插曲|《针尖上的天使》电影主题曲", "林宥嘉", "说谎", "林宥嘉", 264000, 264000),
+    true,
+  );
+});
+
 test("封面、DJ、伴奏、纯音乐、翻唱等衍生版本一律拒绝", async () => {
   const { plugin: m } = await matcher();
   const want = ["起风了", "买辣椒也用券", 325000];

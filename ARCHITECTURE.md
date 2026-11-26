@@ -249,6 +249,11 @@ resolveStream({ track, quality })
   `DURATION`、`MUSICRID`、`web_albumpic_short`。
 - 版权收紧后主流歌曲多为翻唱 / DJ / 伴奏，必须靠严格匹配拒绝错版本；搜索兜底再用
   `hasRelevantTrack()` 判断第一页是否真的命中。
+- 播放链路里的关键词匹配先查旧综合搜索，没命中再用同一 KT 搜索（`searchKuwoKt`）
+  补一次；旧接口一次只返回几条，经常漏掉原曲，KT 结果更全。命中后同样交给
+  `pickMatch()` 做版本 / 歌手 / 时长校验。
+- 酷我歌名常拼「-《剧名》主题曲」这类后缀；`normalizeName()` 会把它去掉再匹配，
+  展示时也会去掉后缀。
 
 ### 酷我波点
 

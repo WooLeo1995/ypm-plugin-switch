@@ -524,14 +524,27 @@ async function main() {
     );
   }
 
-  // 7. 确定无源的歌：186016《晴天》
-  await check("无源歌曲 186016《晴天》→ unavailable", async () => {
+  // 7. 网易云有元数据、但官方直链取不到；酷我旧搜索会漏，KT 搜索能补上 rid。
+  await check("歌 1294910319《脆弱一分钟》→ 酷我 KT 搜索取址", async () => {
+    const started = Date.now();
+    const stream = await withTimeout(
+      () => plugin.stream({ id: "1294910319", quality: "high" }),
+      STREAM_TIMEOUT_MS,
+      "脆弱一分钟 stream",
+    );
+    const head = await headStatus(stream.url);
+    if (!head.ok) throw new Error(`直链不可用：${head.status || head.error}`);
+    return `${new URL(stream.url).hostname} quality=${stream.quality} bitRate=${stream.bitRate ?? "?"} HEAD=${head.status} ${Date.now() - started}ms`;
+  });
+
+  // 7b. 真正无源的伪造编号
+  await check("无源歌曲 999999999999 → unavailable", async () => {
     const started = Date.now();
     try {
       const stream = await withTimeout(
-        () => plugin.stream({ id: "186016", quality: "high" }),
+        () => plugin.stream({ id: "999999999999", quality: "high" }),
         UNAVAILABLE_LIMIT_MS + 15000,
-        "晴天 stream",
+        "无源歌曲 stream",
       );
       throw new Error(`意外解析成功：provider=${describeProvider(requests.slice(-6))} type=${stream.type} quality=${stream.quality}`);
     } catch (error) {

@@ -8,6 +8,8 @@ export function text(value) {
 export function normalizeName(name) {
   return text(name).toLowerCase()
     .replace(/[（(【\[][^）)】\]]*[）)】\]]/g, "")
+    // 酷我常在歌名后拼「-《剧名》主题曲」这类说明，不参与歌名匹配。
+    .replace(/[-—]\s*《[^》]*》[\s\S]*$/, "")
     .replace(/\s+-\s+[\s\S]*$/, "")
     .replace(/\s+/g, " ")
     .trim();

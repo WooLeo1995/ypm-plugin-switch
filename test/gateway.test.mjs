@@ -88,6 +88,45 @@ test("auto 默认顺序：GDStudio 按 ID 先取址，再 HEAD 探测并返回",
   });
 });
 
+test("酷我旧搜索没命中时，用 KT 搜索补一次再按 rid 取址", async () => {
+  const r = await gateway({ settings: { disableGdstudio: "true" } });
+  const kuwoHosts = [];
+  r.route("search.kuwo.cn", (request) => {
+    const params = new URL(request.url).searchParams;
+    if (params.get("client") === "kt") {
+      kuwoHosts.push("kt");
+      return json({
+        PN: "0", RN: "50", SHOW: "1", TOTAL: "1",
+        abslist: [{ SONGNAME: "脆弱一分钟", ARTIST: "林宥嘉", DURATION: "193", MUSICRID: "MUSIC_52844341" }],
+      });
+    }
+    kuwoHosts.push("old");
+    // 旧接口只返回同名翻唱，严格匹配必须拒绝。
+    return json({
+      content: [{}, {
+        musicpage: {
+          abslist: [{ SONGNAME: "脆弱一分钟 (cover: 林宥嘉)", ARTIST: "张玖玖", DURATION: "185", MUSICRID: "MUSIC_275067873" }],
+        },
+      }],
+    });
+  });
+  stubBodian(r);
+
+  const fragile = {
+    id: "1294910319",
+    name: "脆弱一分钟",
+    artists: [{ id: "1", name: "林宥嘉" }],
+    duration: 193000,
+    album: { id: "", name: "脆弱一分钟" },
+  };
+  const stream = await r.plugin.resolveStream({ track: fragile, quality: "high" });
+
+  assert.deepEqual(kuwoHosts, ["old", "kt"]);
+  assert.equal(stream.url, BODIAN_URL);
+  const audio = r.requests.find((request) => request.url.includes("/api/play/music/v2/audioUrl"));
+  assert.equal(new URL(audio.url).searchParams.get("musicId"), "52844341");
+});
+
 test("prefer 与停用开关：酷我优先 / GDStudio 优先 / 单族停用", async () => {
   const r = await gateway({ settings: { prefer: "kuwo" } });
   stubGdstudio(r);
@@ -342,6 +381,8 @@ test("45 秒失败短缓存：连续点播不重复打音源，过期后重新�
   assert.equal(error.message, r.host.t("没有可用音源，请稍后重试"));
   assert.deepEqual(hosts(r.requests), [
     "music-api.gdstudio.xyz",
+    "search.kuwo.cn",
+    "search.kuwo.cn",
     "search.kuwo.cn",
     "search.kuwo.cn",
     "music-api.gdstudio.xyz",

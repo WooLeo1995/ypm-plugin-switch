@@ -58,6 +58,18 @@ const KW_TRACK = {
   album: { id: "", name: "测试专辑" },
 };
 
+test("search：酷我歌名里的「-《剧名》…」后缀会去掉", async () => {
+  const r = await runtime();
+  stubEmptyNetease(r);
+  stubKuwo(r, () => json({
+    PN: "0", RN: "50", SHOW: "1", TOTAL: "1",
+    abslist: [{ ...KUWO_ROW, SONGNAME: "冷门情歌-《某剧》片头曲", MUSICRID: "MUSIC_777" }],
+  }));
+
+  const result = await r.plugin.search({ query: "冷门情歌", kind: "tracks", offset: 0 });
+  assert.equal(result.tracks[0].name, "冷门情歌");
+});
+
 test("search：网易云 0 结果时用酷我兜底，映射 kw:<rid>（含封面、歌手拆分、分页参数）", async () => {
   const r = await runtime();
   stubEmptyNetease(r);
@@ -148,6 +160,29 @@ test("search：网易云只有同名翻唱、没有查询里的歌手时兜底�
   assert.equal(result.tracks[0].id, "kw:888");
   assert.equal(result.tracks[0].name, "说谎");
   assert.deepEqual(plain(result.tracks[0].artists), [{ id: "", name: "林宥嘉" }]);
+});
+
+test("search：网易云有原曲时保留网易云结果（即使官方直链取不到）", async () => {
+  const r = await runtime();
+  let kuwoRequests = 0;
+  r.route("/eapi/cloudsearch/pc", () => json({
+    code: 200,
+    result: {
+      songs: [
+        { ...NETEASE_SONG, id: 1338278424, name: "脆弱一分钟 (Cover：林宥嘉)", ar: [{ id: 1, name: "Freddieee" }] },
+        { ...NETEASE_SONG, id: 1294910319, name: "脆弱一分钟", ar: [{ id: 6452, name: "林宥嘉" }], dt: 193000 },
+      ],
+      songCount: 46,
+    },
+  }));
+  stubKuwo(r, () => {
+    kuwoRequests += 1;
+    return json({ PN: "0", RN: "50", SHOW: "0", TOTAL: "0", abslist: [] });
+  });
+
+  const result = await r.plugin.search({ query: "脆弱一分钟 林宥嘉", kind: "tracks", offset: 0 });
+  assert.equal(kuwoRequests, 0);
+  assert.equal(result.tracks[1].id, "1294910319");
 });
 
 test("search：艺人名查询命中网易云时不兜底", async () => {
